@@ -1,0 +1,1 @@
+add_numsim_fft_test(axis_kind_test SOURCES axis_kind_test.cpp)

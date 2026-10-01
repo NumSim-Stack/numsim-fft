@@ -1,0 +1,29 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(tmech CONFIG)
+
+if(NOT "@NUMSIM_FFT_HAS_STD_MDSPAN@")
+    find_dependency(mdspan)
+endif()
+
+if(NOT "@NUMSIM_FFT_HAS_STD_EXPECTED@")
+    find_dependency(tl-expected)
+endif()
+
+if(@NUMSIM_FFT_ENABLE_OPENMP@)
+    find_dependency(OpenMP COMPONENTS CXX)
+endif()
+
+if(@NUMSIM_FFT_ENABLE_HPX@)
+    find_dependency(HPX)
+endif()
+
+if(@NUMSIM_FFT_ENABLE_MPI@)
+    find_dependency(MPI COMPONENTS CXX)
+    find_dependency(mpl)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/@PROJECT_NAME@Targets.cmake")
+check_required_components("@PROJECT_NAME@")

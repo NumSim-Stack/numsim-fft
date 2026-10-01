@@ -1,0 +1,49 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "NUMSIM_FFT_ENABLE_OPENMP": "ON"
+      }
+    },
+    { "name": "gcc", "hidden": true, "inherits": "base",
+      "cacheVariables": { "CMAKE_CXX_COMPILER": "g++" } },
+    { "name": "clang", "hidden": true, "inherits": "base",
+      "cacheVariables": { "CMAKE_CXX_COMPILER": "clang++" } },
+
+    { "name": "gcc-debug",     "inherits": "gcc",   "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "gcc-release",   "inherits": "gcc",   "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
+    { "name": "clang-debug",   "inherits": "clang", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "clang-release", "inherits": "clang", "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
+
+    { "name": "gcc-mpi", "inherits": "gcc-release",
+      "cacheVariables": { "NUMSIM_FFT_ENABLE_MPI": "ON" } },
+    { "name": "gcc-hpx", "inherits": "gcc-release",
+      "cacheVariables": { "NUMSIM_FFT_ENABLE_HPX": "ON" } },
+    { "name": "gcc-all", "inherits": "gcc-release",
+      "cacheVariables": { "NUMSIM_FFT_ENABLE_MPI": "ON", "NUMSIM_FFT_ENABLE_HPX": "ON" } }
+  ],
+  "buildPresets": [
+    { "name": "gcc-debug",     "configurePreset": "gcc-debug",     "jobs": 16 },
+    { "name": "gcc-release",   "configurePreset": "gcc-release",   "jobs": 16 },
+    { "name": "clang-debug",   "configurePreset": "clang-debug",   "jobs": 16 },
+    { "name": "clang-release", "configurePreset": "clang-release", "jobs": 16 },
+    { "name": "gcc-mpi",       "configurePreset": "gcc-mpi",       "jobs": 16 },
+    { "name": "gcc-hpx",       "configurePreset": "gcc-hpx",       "jobs": 16 },
+    { "name": "gcc-all",       "configurePreset": "gcc-all",       "jobs": 16 }
+  ],
+  "testPresets": [
+    { "name": "gcc-debug",     "configurePreset": "gcc-debug",     "output": { "outputOnFailure": true }, "execution": { "jobs": 16 } },
+    { "name": "gcc-release",   "configurePreset": "gcc-release",   "output": { "outputOnFailure": true }, "execution": { "jobs": 16 } },
+    { "name": "clang-debug",   "configurePreset": "clang-debug",   "output": { "outputOnFailure": true }, "execution": { "jobs": 16 } },
+    { "name": "clang-release", "configurePreset": "clang-release", "output": { "outputOnFailure": true }, "execution": { "jobs": 16 } },
+    { "name": "gcc-mpi",       "configurePreset": "gcc-mpi",       "output": { "outputOnFailure": true } },
+    { "name": "gcc-hpx",       "configurePreset": "gcc-hpx",       "output": { "outputOnFailure": true } },
+    { "name": "gcc-all",       "configurePreset": "gcc-all",       "output": { "outputOnFailure": true } }
+  ]
+}

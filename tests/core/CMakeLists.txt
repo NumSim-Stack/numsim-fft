@@ -1,0 +1,1 @@
+add_numsim_fft_test(core_test SOURCES scalar_traits_test.cpp aligned_allocator_test.cpp expected_test.cpp)
