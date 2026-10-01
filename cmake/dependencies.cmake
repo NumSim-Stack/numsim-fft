@@ -16,7 +16,7 @@ if(DEFINED NUMSIM_FFT_TMECH_DIR)
         set(FETCHCONTENT_SOURCE_DIR_TMECH "${NUMSIM_FFT_TMECH_DIR}")
     endif()
 endif()
-set(NUMSIM_FFT_TMECH_TAG "cc430c031012f4641a4ea198c1f45389309ccc6d" CACHE STRING
+set(NUMSIM_FFT_TMECH_TAG "7267e01897158076effe006ba6877d11b2a3172b" CACHE STRING
     "tmech version (tag or commit) to fetch")   # TODO: v1.2.0 once tagged
 numsim_dependency(tmech
     TARGET tmech::tmech
