@@ -23,6 +23,7 @@
 #include "distributed/distributed_plan.h"
 #endif
 #include "distributed/slab_decomposition.h"
+#include "field/algebra.h"
 #include "field/element_traits.h"
 #include "field/field.h"
 #include "field/tensor_ref.h"

@@ -106,6 +106,11 @@ auto X = rfft(eps).value();
 auto x = irfft(X, eps.extents()).value();
 ```
 
+`field/algebra.h` has the vector-space operations for matrix-free solvers:
+`dot`, `norm2`, `norm`, `axpy`, `scale`, `fill` and a parallel `for_each_point`,
+all taking an executor; reductions sum in a fixed chunk order, so results are
+identical across executors.
+
 For spectral derivatives, `wave_number(kind, k, n, h)`, `wave_vector(plan, index, spacing)`
 and `is_nyquist(k, n)` give the wave numbers of every axis kind; see
 [`examples/spectral_strain.cpp`](examples/spectral_strain.cpp).
