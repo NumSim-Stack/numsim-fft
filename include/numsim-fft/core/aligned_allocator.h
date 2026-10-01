@@ -1,6 +1,7 @@
 #ifndef NUMSIM_FFT_CORE_ALIGNED_ALLOCATOR_H
 #define NUMSIM_FFT_CORE_ALIGNED_ALLOCATOR_H
 
+#include <atomic>
 #include <cstddef>
 #include <new>
 
@@ -9,6 +10,14 @@ namespace numsim::fft {
 /// Alignment of field storage and scratch buffers: one cache line, which
 /// also covers every SIMD width up to AVX-512.
 inline constexpr std::size_t default_alignment{64};
+
+/// Number of allocations made through aligned_allocator so far (all field
+/// and workspace buffers). Diagnostics: lets tests assert that a warm
+/// workspace performs no allocations.
+inline std::atomic<std::size_t> &aligned_allocation_count() noexcept {
+  static std::atomic<std::size_t> count{0};
+  return count;
+}
 
 /// Minimal standard allocator returning Alignment-aligned memory.
 template <typename T, std::size_t Alignment = default_alignment>
@@ -31,6 +40,7 @@ public:
   [[nodiscard]] T *allocate(std::size_t n) {
     if (n > static_cast<std::size_t>(-1) / sizeof(T))
       throw std::bad_array_new_length();
+    aligned_allocation_count().fetch_add(1, std::memory_order_relaxed);
     return static_cast<T *>(
         ::operator new(n * sizeof(T), std::align_val_t{Alignment}));
   }

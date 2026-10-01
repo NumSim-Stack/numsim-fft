@@ -9,43 +9,11 @@
 
 #include <gtest/gtest.h>
 
-#include <atomic>
 #include <complex>
-#include <cstdlib>
-#include <new>
 
-namespace {
-std::atomic<std::size_t> g_allocations{0};
-}
-
-// Counting replacements for the global allocation functions (this TU only
-// defines them; they serve the whole test binary).
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmismatched-new-delete" // false positive on replacements
-#endif
-void *operator new(std::size_t n) {
-  ++g_allocations;
-  if (void *p{std::malloc(n == 0 ? 1 : n)})
-    return p;
-  throw std::bad_alloc{};
-}
-void *operator new(std::size_t n, std::align_val_t al) {
-  ++g_allocations;
-  if (void *p{std::aligned_alloc(static_cast<std::size_t>(al),
-                                 (n + static_cast<std::size_t>(al) - 1) /
-                                     static_cast<std::size_t>(al) * static_cast<std::size_t>(al))})
-    return p;
-  throw std::bad_alloc{};
-}
-void operator delete(void *p) noexcept { std::free(p); }
-void operator delete(void *p, std::size_t) noexcept { std::free(p); }
-void operator delete(void *p, std::align_val_t) noexcept { std::free(p); }
-void operator delete(void *p, std::size_t, std::align_val_t) noexcept { std::free(p); }
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
-
+// Allocations are counted through numsim-fft's aligned_allocator, which all
+// field and workspace buffers use. (Replacing the global operator new in a
+// test is fragile under sanitizers.)
 using namespace numsim::fft;
 using ak = axis_kind;
 
@@ -84,17 +52,17 @@ TEST(workspace, warm_workspace_means_no_allocations) {
   field<ctensor2, 3> hat{p.spectral_extents()};
   field<tensor2, 3> back{e};
   workspace<double> ws;
-  std::size_t const cold{g_allocations.load()};
+  std::size_t const cold{aligned_allocation_count().load()};
   ASSERT_TRUE(p.forward(in, hat, ws).has_value()); // warm-up allocates
   ASSERT_TRUE(p.backward(hat, back, ws).has_value());
-  ASSERT_GT(g_allocations.load(), cold); // the counter does see allocations
+  ASSERT_GT(aligned_allocation_count().load(), cold); // the counter does see allocations
 
-  std::size_t const before{g_allocations.load()};
+  std::size_t const before{aligned_allocation_count().load()};
   for (int r{0}; r < 3; ++r) {
     ASSERT_TRUE(p.forward(in, hat, ws).has_value());
     ASSERT_TRUE(p.backward(hat, back, ws).has_value());
   }
-  EXPECT_EQ(g_allocations.load() - before, 0u);
+  EXPECT_EQ(aligned_allocation_count().load() - before, 0u);
   EXPECT_LT(test::relative_error(back.scalars(), in.scalars()), 1e-14L);
 }
 
