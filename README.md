@@ -93,8 +93,8 @@ plan.backward(eps_hat, eps, openmp_executor{});      // any executor
 // in loops: a workspace keeps all temporaries, no allocation after the first call
 workspace<double> ws;
 for (int it = 0; it < 1000; ++it) {
-  plan.forward(eps, eps_hat, openmp_executor{}, ws).value();
-  plan.backward(eps_hat, eps, openmp_executor{}, ws).value();
+  if (!plan.forward(eps, eps_hat, openmp_executor{}, ws)) throw std::runtime_error("fft");
+  if (!plan.backward(eps_hat, eps, openmp_executor{}, ws)) throw std::runtime_error("ifft");
 }
 
 // mixed axis kinds: DCT-II along x, periodic along y, DST-I along z
@@ -141,7 +141,7 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 | r2c | the **last periodic axis** holds `n/2+1` values. c2r ignores the imaginary parts of the DC and Nyquist entries |
 | r2r | FFTW REDFT00/10/01/11 and RODFT00/10/01/11, unnormalised. Inverse pairs are I↔I, II↔III and IV↔IV (`inverse_kind`); the plan's `backward` applies them |
 | Normalisation | `plan_options{.norm = …}`. `backward` (default) scales the backward transform by 1/N, `ortho` scales both by 1/√N, `none` scales neither. N = ∏ `logical_size(kind, n)`: n for periodic, 2(n−1) for DCT-I, 2(n+1) for DST-I, 2n otherwise |
-| Errors | plan creation and execution return `expected<…, error>`; `to_string(error)` |
+| Errors | plan creation and execution return `expected<…, error>`; `to_string(error)`. Note: `expected<void, error>` has no `value()` with the tl::expected fallback, so test with `if (!r)` |
 
 ## Design
 
