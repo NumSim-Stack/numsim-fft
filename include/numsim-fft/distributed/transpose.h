@@ -4,6 +4,7 @@
 #include "../core/error.h"
 #include "../core/expected.h"
 #include "slab_decomposition.h"
+#include "transpose_sizes.h"
 
 #include <mpl/mpl.hpp>
 
@@ -23,8 +24,8 @@ namespace numsim_fft::detail {
  *  - rows layout: [n0_local(rank)][M1][R], axis 0 split by `rows`.
  *  - cols layout: [N0][m1_local(rank)][R], axis 1 split by `cols`.
  *
- * Messages use MPI_Alltoallv with int counts; a message above INT_MAX
- * scalars is reported as error::message_too_large.
+ * Messages use MPI_Alltoallv with int counts and displacements; see
+ * transpose_fits_int(). Callers must only call the transposes collectively.
  */
 template <typename S> class slab_transpose {
 public:
@@ -35,15 +36,10 @@ public:
       : _comm{comm}, _rows{rows}, _cols{cols}, _R{R},
         _rank{static_cast<size_type>(comm.rank())}, _size{static_cast<size_type>(comm.size())} {}
 
-  /// Largest message of either direction fits into an int count.
-  bool counts_fit_int() const noexcept {
-    size_type largest{0};
-    for (size_type p{0}; p < _size; ++p) {
-      largest = std::max(largest, _rows.local_size(_rank) * _cols.local_size(p) * _R);
-      largest = std::max(largest, _rows.local_size(p) * _cols.local_size(_rank) * _R);
-    }
-    return largest <= static_cast<size_type>(std::numeric_limits<int>::max());
-  }
+  /// Messages and displacements fit MPI's int counts. Identical on every
+  /// rank (pure function of the decomposition), so it is safe to return
+  /// early on it before a collective.
+  bool fits_int() const noexcept { return transpose_fits_int(_rows, _cols, _R); }
 
   /// rows layout -> cols layout.
   void rows_to_cols(S const *src, S *dst) const {

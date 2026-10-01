@@ -49,3 +49,11 @@ TEST(extents, one_dimensional) {
   EXPECT_EQ(e.size(), 16u);
   EXPECT_EQ(e.stride(0), 1u);
 }
+
+TEST(extents, multi_index_on_an_empty_axis) {
+  // zero extents are legal on identity axes; no division by zero
+  extents<3> const e{4, 0, 3};
+  EXPECT_EQ(e.size(), 0u);
+  auto const idx{e.multi_index(0)};
+  EXPECT_EQ(idx[1], 0u);
+}

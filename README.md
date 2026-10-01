@@ -28,7 +28,7 @@ homogenisation.
 | Compiler | GCC ≥ 13 or Clang ≥ 18 (C++23) |
 | CMake | ≥ 3.25 |
 | Required | tmech (sibling checkout `../tmech`, installed, or fetched) |
-| Fallbacks, fetched when the standard library lacks them | kokkos/mdspan (no `std::mdspan`), tl::expected (Clang 18 with libstdc++ 13 hides `std::expected`) |
+| Fallbacks (always available; the headers pick `std::` when the consuming compiler has it) | kokkos/mdspan for `std::mdspan`, tl::expected for `std::expected` (Clang 18 with libstdc++ 13 hides it) |
 | Optional | OpenMP, HPX ≥ 1.11, MPI (+ MPL, fetched if not installed), GoogleTest (tests) |
 
 Each dependency is found with `find_package` when installed. If it isn't,
@@ -116,6 +116,9 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 - **Physical space:** split along axis 0.
 - **Spectral space:** split along axis 1, kept in natural axis order, so no
   transpose back is needed. Wrap an existing `MPI_Comm` with `mpl::mpi_communicator`.
+- **Collectives:** `create`, `forward`, `backward` and the destructor are
+  collective (the plan duplicates the communicator and is move-only). Errors
+  are agreed on by all ranks, so a mismatch on one rank is returned on every rank.
 
 ## Conventions
 

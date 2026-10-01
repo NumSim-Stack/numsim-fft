@@ -17,7 +17,7 @@ template <typename F> using real_of_t = real_type_t<typename F::scalar_type>;
 /// Complex forward transform (periodic axes by default).
 template <typename E, std::size_t D, typename A, executor Exec = sequential_executor>
   requires complex_scalar<typename element_traits<E>::scalar_type>
-expected<field<E, D, A>, error> fft(field<E, D, A> const &x,
+[[nodiscard]] expected<field<E, D, A>, error> fft(field<E, D, A> const &x,
                                          std::array<axis_kind, D> const &kinds = {},
                                          plan_options const &options = {}, Exec const &exec = {}) {
   using T = detail::real_of_t<field<E, D, A>>;
@@ -31,7 +31,7 @@ expected<field<E, D, A>, error> fft(field<E, D, A> const &x,
 /// Complex backward transform, the inverse of fft() (normalised by default).
 template <typename E, std::size_t D, typename A, executor Exec = sequential_executor>
   requires complex_scalar<typename element_traits<E>::scalar_type>
-expected<field<E, D, A>, error> ifft(field<E, D, A> const &x,
+[[nodiscard]] expected<field<E, D, A>, error> ifft(field<E, D, A> const &x,
                                           std::array<axis_kind, D> const &kinds = {},
                                           plan_options const &options = {}, Exec const &exec = {}) {
   using T = detail::real_of_t<field<E, D, A>>;
@@ -45,7 +45,7 @@ expected<field<E, D, A>, error> ifft(field<E, D, A> const &x,
 /// Real-to-complex forward transform; returns the half spectrum.
 template <typename E, std::size_t D, typename A, executor Exec = sequential_executor>
   requires real_scalar<typename element_traits<E>::scalar_type>
-auto rfft(field<E, D, A> const &x, std::array<axis_kind, D> const &kinds = {},
+[[nodiscard]] auto rfft(field<E, D, A> const &x, std::array<axis_kind, D> const &kinds = {},
           plan_options const &options = {}, Exec const &exec = {}) {
   using T = detail::real_of_t<field<E, D, A>>;
   using out_field = typename field<E, D, A>::template rebind_scalar<std::complex<T>>;
@@ -59,7 +59,7 @@ auto rfft(field<E, D, A> const &x, std::array<axis_kind, D> const &kinds = {},
 /// Inverse of rfft(): `physical` is the grid of the real field.
 template <typename E, std::size_t D, typename A, executor Exec = sequential_executor>
   requires complex_scalar<typename element_traits<E>::scalar_type>
-auto irfft(field<E, D, A> const &X, extents<D> const &physical,
+[[nodiscard]] auto irfft(field<E, D, A> const &X, extents<D> const &physical,
            std::array<axis_kind, D> const &kinds = {}, plan_options const &options = {},
            Exec const &exec = {}) {
   using T = detail::real_of_t<field<E, D, A>>;
@@ -74,7 +74,7 @@ auto irfft(field<E, D, A> const &X, extents<D> const &physical,
 /// Real-to-real (DCT/DST) forward transform.
 template <typename E, std::size_t D, typename A, executor Exec = sequential_executor>
   requires real_scalar<typename element_traits<E>::scalar_type>
-expected<field<E, D, A>, error> r2r(field<E, D, A> const &x,
+[[nodiscard]] expected<field<E, D, A>, error> r2r(field<E, D, A> const &x,
                                          std::array<axis_kind, D> const &kinds,
                                          plan_options const &options = {}, Exec const &exec = {}) {
   using T = detail::real_of_t<field<E, D, A>>;
@@ -88,7 +88,7 @@ expected<field<E, D, A>, error> r2r(field<E, D, A> const &x,
 /// Inverse of r2r() with the same `kinds` (applies the inverse kinds).
 template <typename E, std::size_t D, typename A, executor Exec = sequential_executor>
   requires real_scalar<typename element_traits<E>::scalar_type>
-expected<field<E, D, A>, error> inverse_r2r(field<E, D, A> const &X,
+[[nodiscard]] expected<field<E, D, A>, error> inverse_r2r(field<E, D, A> const &X,
                                                  std::array<axis_kind, D> const &kinds,
                                                  plan_options const &options = {},
                                                  Exec const &exec = {}) {

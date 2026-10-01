@@ -31,6 +31,14 @@ namespace numsim_fft {
  * eps[i, j, k] = tmech::sym(grad);
  * sig[i, j, k] = tmech::dcontract(C, eps[i, j, k]);
  * @endcode
+ *
+ * The point accessors return *views* (tensor_ref), not copies:
+ *  - `auto v = eps[i, j, k];` refers to the field's memory and writes
+ *    through; it dangles once the field is destroyed or reallocated.
+ *  - `tensor2 t{eps[i, j, k]};` or to_vector() make copies.
+ *  - assigning an expression that reads the same point
+ *    (`eps[p] = tmech::trans(eps[p])`) aliases, as with tmech::tensor; wrap
+ *    it in tmech::eval().
  */
 template <field_element Element, std::size_t SpatialDim,
           typename Allocator = aligned_allocator<typename element_traits<Element>::scalar_type>>
@@ -113,7 +121,7 @@ public:
   }
 
   /// Copies size() values (row-major point order) into the field.
-  template <std::ranges::input_range R>
+  template <std::ranges::forward_range R>
     requires std::convertible_to<std::ranges::range_reference_t<R>, Element const &>
   void assign(R const &values) {
     if (static_cast<size_type>(std::ranges::distance(values)) != size())

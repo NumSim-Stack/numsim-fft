@@ -4,6 +4,8 @@
 
 #include <complex>
 #include <cstdint>
+#include <list>
+#include <ranges>
 #include <vector>
 
 using namespace numsim_fft;
@@ -126,4 +128,24 @@ TEST(field, mdspan_view_has_trailing_component_extent) {
   EXPECT_EQ(m.extent(1), 5u);
   EXPECT_EQ(m.extent(2), 4u);
   EXPECT_EQ((m[2, 4, 2]), 9.0);
+}
+
+TEST(field, assign_from_list_and_from_a_view) {
+  using tensor2 = tmech::tensor<double, 2, 2>;
+  std::list<tensor2> values(4);
+  double v{0};
+  for (auto &t : values)
+    t(0, 0) = v++;
+  field<tensor2, 2> f{extents{2, 2}};
+  f.assign(values);
+  EXPECT_EQ((f[1, 1](0, 0)), 3.0);
+
+  auto const scaled{std::views::iota(0, 4) | std::views::transform([](int i) {
+                      tensor2 t;
+                      t(1, 1) = 2.0 * i;
+                      return t;
+                    })};
+  f.assign(scaled);
+  EXPECT_EQ((f[1, 0](1, 1)), 4.0);
+  EXPECT_THROW(f.assign(std::vector<tensor2>(3)), std::invalid_argument);
 }

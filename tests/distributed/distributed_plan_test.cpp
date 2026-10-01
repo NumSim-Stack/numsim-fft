@@ -146,6 +146,31 @@ TEST(distributed_plan, extents_mismatch_is_reported) {
   }
 }
 
+TEST(distributed_plan, error_on_one_rank_is_reported_on_all_ranks) {
+  // Rank 1 passes a field with the wrong extents. Without agreement the
+  // other ranks would block in the transpose; every rank must get the error.
+  auto const p{make_distributed_c2c_plan<double>(world(), extents{8, 8}).value()};
+  auto in_extents{p.local_physical_extents()};
+  if (world().rank() == 1)
+    in_extents = in_extents.with_extent(1, 7);
+  field<C, 2> const in{in_extents};
+  field<C, 2> out{p.local_spectral_extents()};
+  if (world().size() > 1) {
+    EXPECT_EQ(p.forward(in, out).error(), error::extents_mismatch);
+    EXPECT_EQ(p.backward(out, const_cast<field<C, 2> &>(in)).error(), error::extents_mismatch);
+  }
+}
+
+TEST(distributed_plan, is_move_only) {
+  static_assert(!std::is_copy_constructible_v<distributed_plan<double, 3>>);
+  static_assert(!std::is_copy_assignable_v<distributed_plan<double, 3>>);
+  static_assert(std::is_nothrow_move_constructible_v<distributed_plan<double, 3>> ||
+                std::is_move_constructible_v<distributed_plan<double, 3>>);
+  auto p{make_distributed_c2c_plan<double>(world(), extents{4, 4, 4}).value()};
+  auto q{std::move(p)};
+  EXPECT_EQ(q.global_physical_extents(), (extents{4, 4, 4}));
+}
+
 int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
   if (world().rank() != 0) {

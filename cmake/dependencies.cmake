@@ -37,64 +37,47 @@ endif()
 target_link_libraries(${PROJECT_NAME} INTERFACE tmech::tmech)
 
 # ---------------------------------------------------------------------------
-# mdspan: std::mdspan when the standard library has it (libstdc++ >= 14,
-# libc++ >= 17), otherwise the Kokkos reference implementation.
+# mdspan and expected fallbacks. The headers pick std::mdspan / std::expected
+# when the *consuming* compiler's standard library has them and the Kokkos
+# reference mdspan / tl::expected otherwise (core/mdspan.h, core/expected.h).
+# Both fallbacks are therefore always made available: a header-only library
+# must not bake its own compiler's feature set into the installed package.
 # ---------------------------------------------------------------------------
-include(CheckCXXSourceCompiles)
-set(CMAKE_REQUIRED_FLAGS "-std=c++23")
-check_cxx_source_compiles("
-    #include <version>
-    #if !defined(__cpp_lib_mdspan)
-    #error no std::mdspan
-    #endif
-    int main() {}" NUMSIM_FFT_HAS_STD_MDSPAN)
-unset(CMAKE_REQUIRED_FLAGS)
+set(MDSPAN_CXX_STANDARD 23 CACHE STRING "" FORCE)
+FetchContent_Declare(mdspan
+    GIT_REPOSITORY https://github.com/kokkos/mdspan.git
+    # 'stable' branch: <mdspan/mdspan.hpp>, namespace Kokkos. The last
+    # release tag (mdspan-0.6.0) still injects into std::experimental.
+    GIT_TAG        8989f70749e28f337e6f7aa210db88659dba6f2f
+    SYSTEM
+    FIND_PACKAGE_ARGS)
+FetchContent_MakeAvailable(mdspan)
+target_link_libraries(${PROJECT_NAME} INTERFACE mdspan::mdspan)
 
-if(NOT NUMSIM_FFT_HAS_STD_MDSPAN)
-    set(MDSPAN_CXX_STANDARD 23 CACHE STRING "" FORCE)
-    FetchContent_Declare(mdspan
-        GIT_REPOSITORY https://github.com/kokkos/mdspan.git
-        # 'stable' branch: <mdspan/mdspan.hpp>, namespace Kokkos. The last
-        # release tag (mdspan-0.6.0) still injects into std::experimental.
-        GIT_TAG        8989f70749e28f337e6f7aa210db88659dba6f2f
-        SYSTEM
-        FIND_PACKAGE_ARGS)
-    FetchContent_MakeAvailable(mdspan)
-    target_link_libraries(${PROJECT_NAME} INTERFACE mdspan::mdspan)
-    target_compile_definitions(${PROJECT_NAME} INTERFACE NUMSIM_FFT_USE_KOKKOS_MDSPAN)
-endif()
-
-# ---------------------------------------------------------------------------
-# expected: std::expected when usable, otherwise tl::expected. libstdc++ 13
-# hides std::expected from Clang 18 (__cpp_concepts < 202002).
-# ---------------------------------------------------------------------------
-set(CMAKE_REQUIRED_FLAGS "-std=c++23")
-check_cxx_source_compiles("
-    #include <expected>
-    int main() { std::expected<int, int> e{1}; return *e - 1; }" NUMSIM_FFT_HAS_STD_EXPECTED)
-unset(CMAKE_REQUIRED_FLAGS)
-
-if(NOT NUMSIM_FFT_HAS_STD_EXPECTED)
-    set(EXPECTED_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
-    set(EXPECTED_BUILD_PACKAGE OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(tl-expected
-        GIT_REPOSITORY https://github.com/TartanLlama/expected.git
-        GIT_TAG        v1.3.1
-        GIT_SHALLOW    TRUE
-        SYSTEM
-        FIND_PACKAGE_ARGS NAMES tl-expected)
-    FetchContent_MakeAvailable(tl-expected)
-    target_link_libraries(${PROJECT_NAME} INTERFACE tl::expected)
-    target_compile_definitions(${PROJECT_NAME} INTERFACE NUMSIM_FFT_USE_TL_EXPECTED)
-endif()
+set(EXPECTED_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
+set(EXPECTED_BUILD_PACKAGE OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(tl-expected
+    GIT_REPOSITORY https://github.com/TartanLlama/expected.git
+    GIT_TAG        v1.3.1
+    GIT_SHALLOW    TRUE
+    SYSTEM
+    FIND_PACKAGE_ARGS NAMES tl-expected)
+FetchContent_MakeAvailable(tl-expected)
+target_link_libraries(${PROJECT_NAME} INTERFACE tl::expected)
 
 # ---------------------------------------------------------------------------
 # OpenMP executor (optional)
 # ---------------------------------------------------------------------------
 if(NUMSIM_FFT_ENABLE_OPENMP)
-    find_package(OpenMP REQUIRED COMPONENTS CXX)
-    target_link_libraries(${PROJECT_NAME} INTERFACE OpenMP::OpenMP_CXX)
-    target_compile_definitions(${PROJECT_NAME} INTERFACE NUMSIM_FFT_HAS_OPENMP)
+    find_package(OpenMP COMPONENTS CXX)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(${PROJECT_NAME} INTERFACE OpenMP::OpenMP_CXX)
+        target_compile_definitions(${PROJECT_NAME} INTERFACE NUMSIM_FFT_HAS_OPENMP)
+    else()
+        # The option defaults to ON; do not fail toolchains without OpenMP.
+        message(WARNING "numsim-fft: OpenMP not found, openmp_executor disabled")
+        set(NUMSIM_FFT_ENABLE_OPENMP OFF)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------

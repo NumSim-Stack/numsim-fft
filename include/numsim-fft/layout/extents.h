@@ -69,6 +69,8 @@ public:
   constexpr index_type multi_index(size_type linear) const noexcept {
     index_type idx{};
     for (size_type d{Dim}; d-- > 0;) {
+      if (_n[d] == 0) // empty (identity) axis: no points, index stays 0
+        continue;
       idx[d] = linear % _n[d];
       linear /= _n[d];
     }

@@ -73,7 +73,7 @@ public:
   using kinds_type = std::array<axis_kind, Dim>;
   using extents_type = extents<Dim>;
 
-  static expected<plan, error> create(extents_type const &shape, transform_domain domain,
+  [[nodiscard]] static expected<plan, error> create(extents_type const &shape, transform_domain domain,
                                            kinds_type const &kinds,
                                            plan_options const &options = {}) {
     std::optional<size_type> r2c_axis;
@@ -119,7 +119,7 @@ public:
   /// Physical space -> spectral space.
   template <typename EIn, typename AIn, typename EOut, typename AOut,
             executor Exec = sequential_executor>
-  expected<void, error> forward(field<EIn, Dim, AIn> const &in, field<EOut, Dim, AOut> &out,
+  [[nodiscard]] expected<void, error> forward(field<EIn, Dim, AIn> const &in, field<EOut, Dim, AOut> &out,
                                      Exec const &exec = {}) const {
     return run<true>(in, out, exec, scale(true));
   }
@@ -127,7 +127,7 @@ public:
   /// Spectral space -> physical space.
   template <typename EIn, typename AIn, typename EOut, typename AOut,
             executor Exec = sequential_executor>
-  expected<void, error> backward(field<EIn, Dim, AIn> const &in, field<EOut, Dim, AOut> &out,
+  [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in, field<EOut, Dim, AOut> &out,
                                       Exec const &exec = {}) const {
     return run<false>(in, out, exec, scale(false));
   }
@@ -304,6 +304,13 @@ private:
     constexpr size_type C{field<EIn, Dim, AIn>::components};
     constexpr bool in_complex{is_complex_v<in_scalar>};
     constexpr bool out_complex{is_complex_v<out_scalar>};
+    // Valid combinations: real->real (r2r), complex->complex (c2c),
+    // real->complex forward / complex->real backward (r2c). The others can
+    // never match a domain and are rejected at compile time; whether the
+    // fields fit *this* plan's domain is checked at run time below.
+    static_assert(Forward ? !(in_complex && !out_complex) : !(!in_complex && out_complex),
+                  "plan: complex input with real output is only valid for backward "
+                  "(and real input with complex output only for forward)");
 
     extents_type const &expected_in{Forward ? _physical : _spectral};
     extents_type const &expected_out{Forward ? _spectral : _physical};
@@ -374,7 +381,7 @@ private:
 
 /// Complex-to-complex plan. Kinds default to periodic on every axis.
 template <real_scalar T, std::size_t Dim>
-expected<plan<T, Dim>, error> make_c2c_plan(extents<Dim> const &shape,
+[[nodiscard]] expected<plan<T, Dim>, error> make_c2c_plan(extents<Dim> const &shape,
                                                  std::array<axis_kind, Dim> const &kinds = {},
                                                  plan_options const &options = {}) {
   return plan<T, Dim>::create(shape, transform_domain::complex_to_complex, kinds, options);
@@ -382,7 +389,7 @@ expected<plan<T, Dim>, error> make_c2c_plan(extents<Dim> const &shape,
 
 /// Real-to-complex plan; the last periodic axis carries the half spectrum.
 template <real_scalar T, std::size_t Dim>
-expected<plan<T, Dim>, error> make_r2c_plan(extents<Dim> const &shape,
+[[nodiscard]] expected<plan<T, Dim>, error> make_r2c_plan(extents<Dim> const &shape,
                                                  std::array<axis_kind, Dim> const &kinds = {},
                                                  plan_options const &options = {}) {
   return plan<T, Dim>::create(shape, transform_domain::real_to_complex, kinds, options);
@@ -390,7 +397,7 @@ expected<plan<T, Dim>, error> make_r2c_plan(extents<Dim> const &shape,
 
 /// Real-to-real plan; every axis needs a DCT/DST kind.
 template <real_scalar T, std::size_t Dim>
-expected<plan<T, Dim>, error> make_r2r_plan(extents<Dim> const &shape,
+[[nodiscard]] expected<plan<T, Dim>, error> make_r2r_plan(extents<Dim> const &shape,
                                                  std::array<axis_kind, Dim> const &kinds,
                                                  plan_options const &options = {}) {
   return plan<T, Dim>::create(shape, transform_domain::real_to_real, kinds, options);
