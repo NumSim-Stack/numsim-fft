@@ -178,13 +178,14 @@ private:
   }
 
   /// Lines per block for a kernel needing `scratch_per_line` complex values
-  /// of scratch per line: keeps the working set around 256 KiB.
+  /// of scratch per line: keeps the working set around 64 KiB (measured
+  /// best compromise between L1 residency and per-block overhead).
   size_type block_size(size_type scratch_per_line, size_type inner) const noexcept {
     if (inner == 0)
       return 1;
     if (_options.max_batch > 0)
       return std::min(_options.max_batch, inner);
-    constexpr size_type budget{256 * 1024};
+    constexpr size_type budget{64 * 1024};
     size_type const bytes{std::max<size_type>(1, scratch_per_line * sizeof(complex_type))};
     return std::clamp<size_type>(budget / bytes, 1, inner);
   }

@@ -135,14 +135,17 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 
 - **Kernels** (`kernel/`) transform *vector batches*: B adjacent lines at
   once, element j of line b at `ptr[j*stride + b]`. For a tensor field, the
-  batch covers the components and every faster grid axis, so the innermost
-  butterfly loop runs over contiguous memory.
+  batch covers the components and every faster grid axis. Inside the kernel
+  the data are split-complex (separate real and imaginary arrays), so the
+  innermost butterfly loop is plain arithmetic on independent arrays and
+  vectorises. `benchmark/` (Google Benchmark, `NUMSIM_FFT_BUILD_BENCHMARK=ON`)
+  measures kernel GFlop/s and whole-field throughput.
 - **Plans** (`transform/plan.h`) run one pass per axis.
   - Each pass is split into (slab, block) work items for the executor, and
     every chunk owns its scratch.
   - The partition doesn't depend on the executor, so all executors give
     bitwise identical results.
-  - Block size: about 256 KiB of scratch per chunk, or `plan_options::max_batch`.
+  - Block size: about 64 KiB of scratch per block, or `plan_options::max_batch`.
 - **r2c:** r2c runs first along the half-spectrum axis. The c2c and r2r
   passes then run on the complex data; a complex batch is a real batch of
   twice the width. `backward` works on a copy of its input and never modifies it.
@@ -172,5 +175,6 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 
 - Pencil decomposition (2D process grids via MPL cartesian communicators),
   distributed 1D transforms, and HPX distributed (parcelport) backend.
-- Explicit SIMD butterflies, cached plans for the distributed temporaries.
+- Radix-8/16 butterflies and explicit SIMD; cached workspaces for the
+  distributed temporaries.
 - Lippmann–Schwinger / Moulinec–Suquet solver on top of the field and plan API.

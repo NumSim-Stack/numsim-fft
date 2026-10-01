@@ -20,8 +20,9 @@ namespace numsim_fft::kernel {
  * The transform is unnormalised; `scale` multiplies the result.
  *
  * Algorithm: mixed-radix Stockham for lengths whose prime factors are
- * <= max_direct_radix, Bluestein otherwise. The data are copied into scratch
- * (vector layout), transformed and copied back. The backward transform uses
+ * <= max_direct_radix, Bluestein otherwise. The data are copied into
+ * split-complex scratch (separate real/imaginary arrays in vector layout),
+ * transformed and copied back; the copies also convert the layout. The backward transform uses
  * conj(F(conj x)), with both conjugations fused into the copies.
  *
  * The plan is immutable after construction. Concurrent execute() calls are
@@ -52,25 +53,37 @@ public:
   void execute(value_type const *in, size_type in_stride, value_type *out, size_type out_stride,
                size_type B, value_type *scratch, T scale_factor = T(1)) const noexcept {
     constexpr bool conjugate{Dir == direction::backward};
+    constexpr T sign{conjugate ? T(-1) : T(1)};
     auto const load = [&](size_type j, size_type b) {
       value_type const v{in[j * in_stride + b]};
-      return conjugate ? std::conj(v) : v;
+      return value_type{v.real(), sign * v.imag()};
     };
-    value_type const *result;
+    const_split<T> result{nullptr, nullptr};
     if (_bluestein_used) {
       result = _bluestein.run(load, B, scratch);
     } else {
-      value_type *a{scratch};
-      for (size_type j{0}; j < _n; ++j)
-        for (size_type b{0}; b < B; ++b)
-          a[j * B + b] = load(j, b);
-      result = _stockham.run(a, scratch + _n * B, B);
-    }
-    for (size_type j{0}; j < _n; ++j)
-      for (size_type b{0}; b < B; ++b) {
-        value_type const v{result[j * B + b]};
-        out[j * out_stride + b] = scale(conjugate ? std::conj(v) : v, scale_factor);
+      // split-complex scratch: [a.re | a.im | b.re | b.im], n * B each
+      T *s{reinterpret_cast<T *>(scratch)};
+      split<T> const a{s, s + _n * B};
+      split<T> const b{s + 2 * _n * B, s + 3 * _n * B};
+      for (size_type j{0}; j < _n; ++j) {
+        T *__restrict ar{a.re + j * B};
+        T *__restrict ai{a.im + j * B};
+        value_type const *src{in + j * in_stride};
+        for (size_type l{0}; l < B; ++l) {
+          ar[l] = src[l].real();
+          ai[l] = sign * src[l].imag();
+        }
       }
+      result = _stockham.run(a, b, B);
+    }
+    for (size_type j{0}; j < _n; ++j) {
+      T const *rr{result.re + j * B};
+      T const *ri{result.im + j * B};
+      value_type *dst{out + j * out_stride};
+      for (size_type l{0}; l < B; ++l)
+        dst[l] = value_type{rr[l] * scale_factor, sign * ri[l] * scale_factor};
+    }
   }
 
   void forward(value_type const *in, size_type in_stride, value_type *out, size_type out_stride,
