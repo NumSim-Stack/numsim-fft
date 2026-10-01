@@ -16,14 +16,14 @@ if(DEFINED NUMSIM_FFT_TMECH_DIR)
         set(FETCHCONTENT_SOURCE_DIR_TMECH "${NUMSIM_FFT_TMECH_DIR}")
     endif()
 endif()
-set(NUMSIM_FFT_TMECH_TAG "7267e01897158076effe006ba6877d11b2a3172b" CACHE STRING
-    "tmech version (tag or commit) to fetch")   # TODO: v1.2.0 once tagged
+set(NUMSIM_FFT_TMECH_TAG "v1.2.0" CACHE STRING
+    "tmech version (tag or commit) to fetch")
 numsim_dependency(tmech
     TARGET tmech::tmech
     GIT_REPOSITORY https://github.com/petlenz/tmech.git
     GIT_TAG        ${NUMSIM_FFT_TMECH_TAG}
     SIBLING        tmech
-    FIND_PACKAGE_ARGS CONFIG
+    FIND_PACKAGE_ARGS 1.2 CONFIG
     # our exported target links tmech, so a fetched tmech is exported along
     OPTIONS TMECH_BUILD_TESTS=OFF TMECH_BUILD_EXAMPLES=OFF TMECH_BUILD_BENCHMARK=OFF
             TMECH_INSTALL_LIBRARY=${NUMSIM_FFT_INSTALL_LIBRARY})
