@@ -12,7 +12,7 @@
 #include <cstddef>
 #include <vector>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @file Vector-space operations on fields (the building blocks of
@@ -140,6 +140,6 @@ void for_each_point(field<E, D, A> const &x, F const &f, Exec const &exec = {}) 
   });
 }
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_FIELD_ALGEBRA_H

@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 TEST(axis_kind, r2r_classification) {
   EXPECT_FALSE(is_r2r(axis_kind::periodic));

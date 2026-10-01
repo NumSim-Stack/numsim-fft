@@ -4,7 +4,7 @@
 #include <concepts>
 #include <cstddef>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Runs independent work items, possibly in parallel.
@@ -21,6 +21,6 @@ concept executor = requires(E const &e, std::size_t n, void (*f)(std::size_t)) {
   e.bulk(n, f);
 };
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_EXECUTION_EXECUTOR_H

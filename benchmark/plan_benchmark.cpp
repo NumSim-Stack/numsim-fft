@@ -3,7 +3,7 @@
 
 #include <benchmark/benchmark.h>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 template <typename Exec> static void r2c_rank2_3d(benchmark::State &state) {
   std::size_t const n{static_cast<std::size_t>(state.range(0))};

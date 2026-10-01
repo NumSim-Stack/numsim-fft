@@ -4,7 +4,7 @@
 
 #include <complex>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 TEST(element_traits, scalars) {
   using tr = element_traits<double>;

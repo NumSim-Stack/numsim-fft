@@ -19,7 +19,7 @@ template <typename Exec> class executor_test : public testing::Test {};
 TYPED_TEST_SUITE(executor_test, executor_types);
 
 TYPED_TEST(executor_test, satisfies_the_concept) {
-  static_assert(numsim_fft::executor<TypeParam>);
+  static_assert(numsim::fft::executor<TypeParam>);
   EXPECT_GE(TypeParam{}.concurrency(), 1u);
 }
 
@@ -44,7 +44,7 @@ TYPED_TEST(executor_test, bulk_propagates_exceptions) {
 }
 
 TYPED_TEST(executor_test, plan_results_are_bitwise_identical_to_sequential) {
-  using namespace numsim_fft;
+  using namespace numsim::fft;
   using tensor2 = tmech::tensor<double, 3, 2>;
   using ctensor2 = tmech::tensor<std::complex<double>, 3, 2>;
   extents<3> const e{12, 10, 16};

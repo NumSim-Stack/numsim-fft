@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <limits>
 
-namespace numsim_fft::detail {
+namespace numsim::fft::detail {
 
 /// a * b, saturating at the maximum of size_t instead of wrapping.
 constexpr std::size_t saturating_mul(std::size_t a, std::size_t b) noexcept {
@@ -53,6 +53,6 @@ constexpr bool transpose_fits_int(slab_decomposition rows, slab_decomposition co
   return s.largest_message <= limit && s.largest_local_total <= limit;
 }
 
-} // namespace numsim_fft::detail
+} // namespace numsim::fft::detail
 
 #endif // NUMSIM_FFT_DISTRIBUTED_TRANSPOSE_SIZES_H

@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <stdexcept>
 
-namespace numsim_fft::kernel {
+namespace numsim::fft::kernel {
 
 /**
  * @brief Complex 1D DFT of fixed length n on strided vector batches.
@@ -103,6 +103,6 @@ private:
   bluestein<T> _bluestein;
 };
 
-} // namespace numsim_fft::kernel
+} // namespace numsim::fft::kernel
 
 #endif // NUMSIM_FFT_KERNEL_C2C_PLAN_1D_H

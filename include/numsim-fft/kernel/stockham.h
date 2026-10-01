@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <vector>
 
-namespace numsim_fft::kernel {
+namespace numsim::fft::kernel {
 
 /// Real and imaginary parts of a batch buffer as two separate arrays
 /// ("split complex"). Element j of line b is at re[j * B + b], im[j * B + b].
@@ -262,6 +262,6 @@ private:
   std::vector<cplx<T>> _roots;
 };
 
-} // namespace numsim_fft::kernel
+} // namespace numsim::fft::kernel
 
 #endif // NUMSIM_FFT_KERNEL_STOCKHAM_H

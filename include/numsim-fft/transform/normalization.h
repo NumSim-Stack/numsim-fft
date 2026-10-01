@@ -1,7 +1,7 @@
 #ifndef NUMSIM_FFT_TRANSFORM_NORMALIZATION_H
 #define NUMSIM_FFT_TRANSFORM_NORMALIZATION_H
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Where the factor 1/N goes, with N the product over the axes of
@@ -12,6 +12,6 @@ namespace numsim_fft {
  */
 enum class normalization { none, backward, ortho };
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_TRANSFORM_NORMALIZATION_H

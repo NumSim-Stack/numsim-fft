@@ -11,7 +11,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace numsim_fft::kernel {
+namespace numsim::fft::kernel {
 
 /**
  * @brief Real-to-real 1D transforms DCT/DST I-IV (FFTW REDFT/RODFT
@@ -259,6 +259,6 @@ private:
   std::vector<complex_type> _post;
 };
 
-} // namespace numsim_fft::kernel
+} // namespace numsim::fft::kernel
 
 #endif // NUMSIM_FFT_KERNEL_R2R_PLAN_1D_H

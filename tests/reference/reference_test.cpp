@@ -7,7 +7,7 @@
 
 #include <gtest/gtest.h>
 
-using numsim_fft::axis_kind;
+using numsim::fft::axis_kind;
 
 namespace {
 constexpr long double tight{1e-15L};

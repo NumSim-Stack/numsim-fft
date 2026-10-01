@@ -5,7 +5,7 @@
 #include <concepts>
 #include <cstddef>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Number of grid points per axis of a row-major (last axis fastest)
@@ -92,6 +92,6 @@ private:
 
 template <std::integral... I> extents(I...) -> extents<sizeof...(I)>;
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_LAYOUT_EXTENTS_H

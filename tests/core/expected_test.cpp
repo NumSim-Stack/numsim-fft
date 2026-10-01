@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 namespace {
 expected<int, int> half(int v) {

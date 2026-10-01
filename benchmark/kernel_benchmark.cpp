@@ -7,7 +7,7 @@
 #include <cmath>
 #include <vector>
 
-using namespace numsim_fft::kernel;
+using namespace numsim::fft::kernel;
 
 static void c2c_1d(benchmark::State &state) {
   std::size_t const n{static_cast<std::size_t>(state.range(0))};

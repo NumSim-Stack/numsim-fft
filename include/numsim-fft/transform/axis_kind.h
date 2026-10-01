@@ -3,7 +3,7 @@
 
 #include <cstddef>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Transform applied along one grid axis.
@@ -98,6 +98,6 @@ constexpr std::size_t minimum_size(axis_kind kind) noexcept {
   }
 }
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_TRANSFORM_AXIS_KIND_H

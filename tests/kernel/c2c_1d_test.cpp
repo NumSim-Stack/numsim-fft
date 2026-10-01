@@ -9,8 +9,8 @@
 #include <complex>
 #include <vector>
 
-using namespace numsim_fft;
-using numsim_fft::kernel::c2c_plan_1d;
+using namespace numsim::fft;
+using numsim::fft::kernel::c2c_plan_1d;
 
 namespace {
 

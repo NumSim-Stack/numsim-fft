@@ -6,7 +6,7 @@
 #include <numbers>
 #include <type_traits>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 template <typename T> struct is_complex : std::false_type {};
 template <typename T> struct is_complex<std::complex<T>> : std::true_type {};
@@ -52,6 +52,6 @@ template <typename T> using complex_type_t = std::complex<real_type_t<T>>;
 /// pi in the precision of T.
 template <real_scalar T> inline constexpr T pi_v = std::numbers::pi_v<T>;
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_CORE_SCALAR_TRAITS_H

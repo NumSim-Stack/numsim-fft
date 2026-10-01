@@ -15,7 +15,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Values of type Element on a SpatialDim-dimensional regular grid.
@@ -48,7 +48,7 @@ public:
   using element_type = Element;
   using scalar_type = typename traits::scalar_type;
   using allocator_type = Allocator;
-  using extents_type = numsim_fft::extents<SpatialDim>;
+  using extents_type = numsim::fft::extents<SpatialDim>;
   using index_type = typename extents_type::index_type;
   using reference = typename traits::reference;
   using const_reference = typename traits::const_reference;
@@ -159,6 +159,6 @@ private:
   std::vector<scalar_type, Allocator> _data;
 };
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_FIELD_FIELD_H

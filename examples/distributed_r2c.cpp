@@ -11,7 +11,7 @@
 #include <cstdio>
 
 int main() {
-  using namespace numsim_fft;
+  using namespace numsim::fft;
   using tensor2 = tmech::tensor<double, 3, 2>;
   using ctensor2 = tmech::tensor<std::complex<double>, 3, 2>;
 

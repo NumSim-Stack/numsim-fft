@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <new>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /// Alignment of field storage and scratch buffers: one cache line, which
 /// also covers every SIMD width up to AVX-512.
@@ -46,6 +46,6 @@ public:
   }
 };
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_CORE_ALIGNED_ALLOCATOR_H

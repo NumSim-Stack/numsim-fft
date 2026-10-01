@@ -5,7 +5,7 @@
 #include <functional>
 #include <numeric>
 
-using namespace numsim_fft::kernel;
+using namespace numsim::fft::kernel;
 
 namespace {
 std::size_t product(std::vector<std::size_t> const &f) {

@@ -9,7 +9,7 @@
 #include <complex>
 #include <vector>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 using ak = axis_kind;
 
 namespace {

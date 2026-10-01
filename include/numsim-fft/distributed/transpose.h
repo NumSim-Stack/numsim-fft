@@ -13,7 +13,7 @@
 #include <cstddef>
 #include <limits>
 
-namespace numsim_fft::detail {
+namespace numsim::fft::detail {
 
 /**
  * @brief Global redistribution between the two slab layouts, for scalars S.
@@ -129,6 +129,6 @@ private:
   size_type _size;
 };
 
-} // namespace numsim_fft::detail
+} // namespace numsim::fft::detail
 
 #endif // NUMSIM_FFT_DISTRIBUTED_TRANSPOSE_H

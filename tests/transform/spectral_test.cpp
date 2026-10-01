@@ -8,7 +8,7 @@
 #include <cmath>
 #include <numbers>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 using ak = axis_kind;
 
 TEST(spectral, periodic_wave_numbers_are_signed) {

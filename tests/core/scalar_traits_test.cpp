@@ -4,7 +4,7 @@
 
 #include <complex>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 TEST(scalar_traits, complex_detection) {
   static_assert(!is_complex_v<double>);

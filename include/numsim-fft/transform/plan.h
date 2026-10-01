@@ -24,7 +24,7 @@
 #include <optional>
 #include <vector>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 template <real_scalar T, std::size_t Dim> class distributed_plan;
 
@@ -116,7 +116,7 @@ public:
   long double logical_size() const noexcept {
     long double n{1};
     for (size_type d{0}; d < Dim; ++d)
-      n *= static_cast<long double>(numsim_fft::logical_size(_kinds[d], _physical[d]));
+      n *= static_cast<long double>(numsim::fft::logical_size(_kinds[d], _physical[d]));
     return n;
   }
 
@@ -438,6 +438,6 @@ template <real_scalar T, std::size_t Dim>
   return plan<T, Dim>::create(shape, transform_domain::real_to_real, kinds, options);
 }
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_TRANSFORM_PLAN_H

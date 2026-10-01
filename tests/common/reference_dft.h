@@ -61,8 +61,8 @@ inline real sin_pi(std::size_t p, std::size_t q) {
 
 /// 1D real-to-real transform in the FFTW conventions.
 inline std::vector<real> r2r(std::vector<real> const &x,
-                             numsim_fft::axis_kind kind) {
-  using numsim_fft::axis_kind;
+                             numsim::fft::axis_kind kind) {
+  using numsim::fft::axis_kind;
   std::size_t const n{x.size()};
   std::vector<real> y(n, 0);
   for (std::size_t k{0}; k < n; ++k) {

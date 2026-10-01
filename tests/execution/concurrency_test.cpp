@@ -13,7 +13,7 @@
 #include <thread>
 #include <vector>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 TEST(concurrency, threads_share_one_plan) {
   using tensor2 = tmech::tensor<double, 3, 2>;

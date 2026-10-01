@@ -10,7 +10,7 @@
 #include <numbers>
 #include <vector>
 
-namespace numsim_fft::kernel {
+namespace numsim::fft::kernel {
 
 /**
  * @brief Bluestein (chirp-z) forward DFT of any length n, as a cyclic
@@ -119,6 +119,6 @@ private:
   std::vector<cplx<T>> _kernel;
 };
 
-} // namespace numsim_fft::kernel
+} // namespace numsim::fft::kernel
 
 #endif // NUMSIM_FFT_KERNEL_BLUESTEIN_H

@@ -8,7 +8,7 @@
 #include <ranges>
 #include <vector>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 TEST(field, scalar_field_is_zero_initialised_and_indexable) {
   field<double, 2> f{extents{3, 4}};

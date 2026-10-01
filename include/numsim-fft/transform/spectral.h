@@ -9,7 +9,7 @@
 #include <cstddef>
 #include <numbers>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Wave number of spectral index k on an axis of n points with grid
@@ -73,6 +73,6 @@ std::array<T, Dim> wave_vector(plan<T, Dim> const &p, std::array<std::size_t, Di
   return k;
 }
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_TRANSFORM_SPECTRAL_H

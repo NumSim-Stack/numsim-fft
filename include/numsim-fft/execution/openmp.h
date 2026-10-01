@@ -11,7 +11,7 @@
 #include <exception>
 #include <mutex>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Runs work items on an OpenMP thread team (dynamic schedule).
@@ -46,6 +46,6 @@ struct openmp_executor {
   }
 };
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_EXECUTION_OPENMP_H

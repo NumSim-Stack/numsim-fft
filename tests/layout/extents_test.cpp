@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 TEST(extents, size_and_strides_are_row_major) {
   constexpr extents<3> e{4, 5, 6};

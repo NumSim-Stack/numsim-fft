@@ -13,7 +13,7 @@
 #include <cstddef>
 #include <exception>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Runs work items as HPX tasks (hpx::experimental::for_loop with the
@@ -44,6 +44,6 @@ struct hpx_executor {
   }
 };
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_EXECUTION_HPX_H

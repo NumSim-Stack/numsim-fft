@@ -14,8 +14,6 @@ project(numsim-fft
     DESCRIPTION "Generic, header-only C++23 FFT library for tmech tensor fields"
     LANGUAGES CXX)
 
-include(FetchContent)
-
 # Default C++ standard for tests / examples in this tree. The library's own
 # C++23 requirement is an INTERFACE compile feature on the target, so
 # consumers inherit it through the linked target.
@@ -33,13 +31,14 @@ endif()
 option(NUMSIM_FFT_BUILD_TESTS      "Build the numsim-fft test suite"        ${NUMSIM_FFT_IS_TOP_LEVEL})
 option(NUMSIM_FFT_BUILD_EXAMPLES   "Build the numsim-fft examples"          ${NUMSIM_FFT_IS_TOP_LEVEL})
 option(NUMSIM_FFT_BUILD_BENCHMARK  "Build the numsim-fft benchmarks"        OFF)
-option(NUMSIM_FFT_SANITIZER_TESTS  "Also build and run the tests under ASan+UBSan (and TSan where threads are involved)" ${NUMSIM_FFT_IS_TOP_LEVEL})
+if(DEFINED NUMSIM_FFT_SANITIZER_TESTS AND NOT DEFINED NUMSIM_SANITIZER_TESTS)
+    message(DEPRECATION "numsim-fft: NUMSIM_FFT_SANITIZER_TESTS is now NUMSIM_SANITIZER_TESTS (numsim-cmake)")
+    set(NUMSIM_SANITIZER_TESTS ${NUMSIM_FFT_SANITIZER_TESTS} CACHE BOOL "" FORCE)
+endif()
 option(NUMSIM_FFT_INSTALL_LIBRARY  "Install the numsim-fft library"         ${NUMSIM_FFT_IS_TOP_LEVEL})
 option(NUMSIM_FFT_ENABLE_OPENMP    "Enable the OpenMP executor"             ON)
 option(NUMSIM_FFT_ENABLE_HPX       "Enable the HPX (local) executor"        OFF)
 option(NUMSIM_FFT_ENABLE_MPI       "Enable distributed transforms via MPI"  OFF)
-set(NUMSIM_FFT_TMECH_DIR "${PROJECT_SOURCE_DIR}/../tmech" CACHE PATH
-    "Local tmech checkout; used via add_subdirectory when it exists")
 
 # numsim-fft is header-only: an INTERFACE target carrying include paths,
 # the C++23 requirement and the optional backend dependencies.
@@ -93,7 +92,7 @@ endif()
 
 if(NUMSIM_FFT_BUILD_TESTS)
     enable_testing()
-    include(GoogleTest)
+    include(NumSimTesting)
     add_subdirectory(tests)
 endif()
 

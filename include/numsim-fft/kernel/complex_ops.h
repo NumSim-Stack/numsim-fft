@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <numbers>
 
-namespace numsim_fft::kernel {
+namespace numsim::fft::kernel {
 
 template <typename T> using cplx = std::complex<T>;
 
@@ -43,6 +43,6 @@ template <real_scalar T> cplx<T> root_of_unity(std::size_t k, std::size_t n) {
   return {static_cast<T>(std::cos(angle)), static_cast<T>(std::sin(angle))};
 }
 
-} // namespace numsim_fft::kernel
+} // namespace numsim::fft::kernel
 
 #endif // NUMSIM_FFT_KERNEL_COMPLEX_OPS_H

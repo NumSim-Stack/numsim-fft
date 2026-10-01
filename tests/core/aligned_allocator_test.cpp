@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <vector>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 TEST(aligned_allocator, vector_data_is_aligned) {
   for (std::size_t n : {1u, 3u, 17u, 1000u}) {

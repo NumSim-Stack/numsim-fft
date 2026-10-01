@@ -17,15 +17,15 @@ namespace ref {
 template <std::size_t Dim>
 std::vector<complex> forward_nd(std::vector<complex> data, std::array<std::size_t, Dim> const &ext,
                                 std::size_t components,
-                                std::array<numsim_fft::axis_kind, Dim> const &kinds,
+                                std::array<numsim::fft::axis_kind, Dim> const &kinds,
                                 int sign = -1) {
   for (std::size_t axis{0}; axis < Dim; ++axis) {
     auto const kind{kinds[axis]};
-    if (kind == numsim_fft::axis_kind::identity)
+    if (kind == numsim::fft::axis_kind::identity)
       continue;
     data = along_axis(data, ext, components, axis, ext[axis],
                       [&](std::vector<complex> const &line) {
-                        if (kind == numsim_fft::axis_kind::periodic)
+                        if (kind == numsim::fft::axis_kind::periodic)
                           return dft(line, sign);
                         std::vector<real> re(line.size()), im(line.size());
                         for (std::size_t j{0}; j < line.size(); ++j) {

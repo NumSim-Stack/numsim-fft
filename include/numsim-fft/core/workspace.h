@@ -9,7 +9,7 @@
 #include <cstddef>
 #include <vector>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Reusable temporaries for plan execution.
@@ -94,6 +94,6 @@ inline constexpr std::size_t transpose_cache{5}; ///< distributed: MPI layouts
 inline constexpr std::size_t user_base{16};
 } // namespace workspace_slot
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_CORE_WORKSPACE_H

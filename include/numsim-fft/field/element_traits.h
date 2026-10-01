@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <cstddef>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Describes how one grid-point value is stored in a field buffer.
@@ -45,7 +45,7 @@ template <scalar T> struct element_traits<T> {
 
 /**
  * @brief tmech tensors: Dim^Rank components in tmech's row-major order,
- * viewed through numsim_fft::tensor_ref. Ranks 1, 2 and 4 (the ranks
+ * viewed through numsim::fft::tensor_ref. Ranks 1, 2 and 4 (the ranks
  * tmech::full storage supports).
  */
 template <scalar T, std::size_t Dim, std::size_t Rank>
@@ -81,6 +81,6 @@ concept field_element = requires {
   { element_traits<E>::components } -> std::convertible_to<std::size_t>;
 };
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_FIELD_ELEMENT_TRAITS_H

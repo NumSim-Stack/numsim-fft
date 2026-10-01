@@ -10,8 +10,8 @@
 #include <stdexcept>
 #include <vector>
 
-using namespace numsim_fft;
-using numsim_fft::kernel::r2r_plan_1d;
+using namespace numsim::fft;
+using numsim::fft::kernel::r2r_plan_1d;
 
 namespace {
 

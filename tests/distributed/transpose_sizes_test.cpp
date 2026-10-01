@@ -9,7 +9,7 @@
 
 #include <limits>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 TEST(transpose_sizes, verdict_does_not_depend_on_the_rank) {
   slab_decomposition const rows{3, 2}, cols{3, 2};

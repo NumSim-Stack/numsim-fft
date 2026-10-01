@@ -4,12 +4,12 @@
 
 #include <hpx/init.hpp>
 
-using executor_types = testing::Types<numsim_fft::hpx_executor>;
+using executor_types = testing::Types<numsim::fft::hpx_executor>;
 
 #include "executor_tests.h"
 
 TEST(hpx_executor, reports_hpx_worker_threads) {
-  EXPECT_EQ(numsim_fft::hpx_executor{}.concurrency(),
+  EXPECT_EQ(numsim::fft::hpx_executor{}.concurrency(),
             static_cast<std::size_t>(hpx::get_num_worker_threads()));
 }
 

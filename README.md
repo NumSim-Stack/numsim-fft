@@ -31,8 +31,10 @@ homogenisation.
 | Fallback (always available; the header picks `std::mdspan` when the consuming compiler has it) | kokkos/mdspan |
 | Optional | OpenMP, HPX ≥ 1.11, MPI (+ MPL, fetched if not installed), GoogleTest (tests) |
 
-Each dependency is found with `find_package` when installed. If it isn't,
-FetchContent downloads and builds it.
+Dependencies are resolved by [numsim-cmake](https://github.com/NumSim-Stack/numsim-cmake)'s
+`numsim_dependency`: an existing target → `FETCHCONTENT_SOURCE_DIR_<NAME>` → a
+sibling checkout (`../tmech`, …) → an installed package → a fetch of the pinned
+version. Nothing is fetched from a moving branch.
 
 ## Building
 
@@ -49,11 +51,12 @@ cmake --preset gcc-all              # MPI + HPX
 | Option | Default | |
 |---|---|---|
 | `NUMSIM_FFT_BUILD_TESTS` / `_EXAMPLES` | ON if top level | |
-| `NUMSIM_FFT_SANITIZER_TESTS` | ON if top level | ASan+UBSan (and TSan) test variants |
+| `NUMSIM_SANITIZER_TESTS` | ON | ASan+UBSan (and TSan) test variants (numsim-cmake) |
+| `NUMSIM_PREFER_SIBLINGS`, `NUMSIM_DEVEL_DIR` | ON, `..` | use sibling checkouts of dependencies when present |
+| `NUMSIM_FFT_TMECH_TAG` | pinned | tmech version to fetch |
 | `NUMSIM_FFT_ENABLE_OPENMP` | ON | `openmp_executor` |
 | `NUMSIM_FFT_ENABLE_HPX` | OFF | `hpx_executor` |
 | `NUMSIM_FFT_ENABLE_MPI` | OFF | `distributed_plan` |
-| `NUMSIM_FFT_TMECH_DIR` | `../tmech` | tmech checkout used via `add_subdirectory` |
 
 **HPX build notes:**
 - When HPX is not installed, it is built from source (v1.11.0) as a
@@ -73,7 +76,7 @@ target_link_libraries(app PRIVATE numsim-fft::numsim-fft)
 
 ```cpp
 #include <numsim-fft/numsim_fft.h>
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 using tensor2  = tmech::tensor<double, 3, 2>;
 using ctensor2 = tmech::tensor<std::complex<double>, 3, 2>;
@@ -175,8 +178,10 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 - GoogleTest, written test-first.
 - Every test is also built and run under AddressSanitizer + UndefinedBehaviorSanitizer
   (`<name>_asan`), and the threaded tests under ThreadSanitizer (`<name>_tsan`);
-  `ctest` runs all variants. `NUMSIM_FFT_SANITIZER_TESTS=OFF` disables them.
+  `ctest` runs all variants. `NUMSIM_SANITIZER_TESTS=OFF` disables them.
   The HPX test is excluded (HPX needs its own sanitizer build).
+- CI (GitHub Actions): GCC 13 Debug, GCC 14 Release, Clang 19 Debug, plus an
+  Open MPI job on 1–4 ranks; the HPX job runs on demand.
 - References are naive O(N²) transforms in `long double`
   (`tests/common/reference_dft.h`), which are themselves checked against
   closed forms.

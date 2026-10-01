@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <type_traits>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Non-owning view of one tensor inside a field buffer.
@@ -84,13 +84,13 @@ private:
   T *_ptr;
 };
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 namespace tmech {
 /// tmech accepts operands through this trait (one specialisation per type);
 /// tensor_ref provides the adaptor interface, so it qualifies.
 template <typename T, std::size_t Dim, std::size_t Rank>
-struct is_tensor_type<numsim_fft::tensor_ref<T, Dim, Rank>> {
+struct is_tensor_type<numsim::fft::tensor_ref<T, Dim, Rank>> {
   using type = std::true_type;
   static constexpr bool value = true;
 };

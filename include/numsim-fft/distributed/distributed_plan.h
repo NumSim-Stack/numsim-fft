@@ -16,7 +16,7 @@
 #include <array>
 #include <cstddef>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief n-D transform (Dim >= 2) of a field distributed over the ranks of
@@ -269,6 +269,6 @@ make_distributed_r2r_plan(mpl::communicator const &comm, extents<Dim> const &glo
                                           options);
 }
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_DISTRIBUTED_DISTRIBUTED_PLAN_H

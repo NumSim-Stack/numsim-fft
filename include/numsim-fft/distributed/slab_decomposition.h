@@ -3,7 +3,7 @@
 
 #include <cstddef>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /**
  * @brief Block distribution of `global` indices over `parts` parts.
@@ -35,6 +35,6 @@ private:
   size_type _parts;
 };
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_DISTRIBUTED_SLAB_DECOMPOSITION_H

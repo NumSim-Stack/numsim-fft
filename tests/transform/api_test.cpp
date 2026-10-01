@@ -7,7 +7,7 @@
 
 #include <complex>
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 
 namespace {
 template <typename E, std::size_t D> field<E, D> random_field(extents<D> const &e) {

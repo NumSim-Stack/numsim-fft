@@ -46,7 +46,7 @@ void operator delete(void *p, std::size_t, std::align_val_t) noexcept { std::fre
 #pragma GCC diagnostic pop
 #endif
 
-using namespace numsim_fft;
+using namespace numsim::fft;
 using ak = axis_kind;
 
 namespace {

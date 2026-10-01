@@ -1,7 +1,7 @@
 #ifndef NUMSIM_FFT_CORE_EXPECTED_H
 #define NUMSIM_FFT_CORE_EXPECTED_H
 
-// numsim_fft::expected / unexpected are std::expected / std::unexpected.
+// numsim::fft::expected / unexpected are std::expected / std::unexpected.
 // std::expected is part of the NumSim toolchain baseline: GCC >= 13, or
 // Clang >= 19 (libstdc++ hides <expected> from Clang 18, whose
 // __cpp_concepts is still 201907). This header is the single include point,
@@ -15,9 +15,9 @@
 
 #include <expected>
 
-namespace numsim_fft {
+namespace numsim::fft {
 using std::expected;
 using std::unexpected;
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_CORE_EXPECTED_H

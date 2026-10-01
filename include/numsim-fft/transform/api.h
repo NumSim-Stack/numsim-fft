@@ -8,7 +8,7 @@
 
 #include <complex>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 namespace detail {
 template <typename F> using real_of_t = real_type_t<typename F::scalar_type>;
@@ -114,6 +114,6 @@ template <typename E, std::size_t D, typename A, executor Exec = sequential_exec
       });
 }
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_TRANSFORM_API_H

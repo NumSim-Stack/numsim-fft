@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <vector>
 
-namespace numsim_fft::kernel {
+namespace numsim::fft::kernel {
 
 /// Largest prime handled by a direct (generic O(R^2)) butterfly; lengths
 /// with a larger prime factor go through Bluestein's algorithm.
@@ -60,6 +60,6 @@ constexpr std::size_t next_power_of_two(std::size_t n) noexcept {
   return p;
 }
 
-} // namespace numsim_fft::kernel
+} // namespace numsim::fft::kernel
 
 #endif // NUMSIM_FFT_KERNEL_FACTORIZE_H

@@ -3,7 +3,7 @@
 
 #include <cstddef>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /// Runs all work items in order on the calling thread; the reference executor.
 struct sequential_executor {
@@ -15,6 +15,6 @@ struct sequential_executor {
   }
 };
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_EXECUTION_SEQUENTIAL_H

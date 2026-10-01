@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-using numsim_fft::slab_decomposition;
+using numsim::fft::slab_decomposition;
 
 TEST(slab_decomposition, even_split) {
   slab_decomposition const d{12, 4};

@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace numsim_fft::kernel {
+namespace numsim::fft::kernel {
 
 /**
  * @brief Real-input 1D DFT of length n and its inverse, on strided vector
@@ -133,6 +133,6 @@ private:
   std::vector<complex_type> _twiddles; // exp(-2 pi i k / n), k <= n/2
 };
 
-} // namespace numsim_fft::kernel
+} // namespace numsim::fft::kernel
 
 #endif // NUMSIM_FFT_KERNEL_R2C_PLAN_1D_H

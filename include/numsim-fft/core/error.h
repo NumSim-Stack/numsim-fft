@@ -3,7 +3,7 @@
 
 #include <string_view>
 
-namespace numsim_fft {
+namespace numsim::fft {
 
 /// Errors reported through std::expected by plan creation and execution.
 enum class error {
@@ -36,6 +36,6 @@ constexpr std::string_view to_string(error e) noexcept {
   return "unknown error";
 }
 
-} // namespace numsim_fft
+} // namespace numsim::fft
 
 #endif // NUMSIM_FFT_CORE_ERROR_H
