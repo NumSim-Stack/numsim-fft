@@ -49,6 +49,7 @@ cmake --preset gcc-all              # MPI + HPX
 | Option | Default | |
 |---|---|---|
 | `NUMSIM_FFT_BUILD_TESTS` / `_EXAMPLES` | ON if top level | |
+| `NUMSIM_FFT_SANITIZER_TESTS` | ON if top level | ASan+UBSan (and TSan) test variants |
 | `NUMSIM_FFT_ENABLE_OPENMP` | ON | `openmp_executor` |
 | `NUMSIM_FFT_ENABLE_HPX` | OFF | `hpx_executor` |
 | `NUMSIM_FFT_ENABLE_MPI` | OFF | `distributed_plan` |
@@ -150,6 +151,10 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 ## Tests
 
 - GoogleTest, written test-first.
+- Every test is also built and run under AddressSanitizer + UndefinedBehaviorSanitizer
+  (`<name>_asan`), and the threaded tests under ThreadSanitizer (`<name>_tsan`);
+  `ctest` runs all variants. `NUMSIM_FFT_SANITIZER_TESTS=OFF` disables them.
+  The HPX test is excluded (HPX needs its own sanitizer build).
 - References are naive O(N²) transforms in `long double`
   (`tests/common/reference_dft.h`), which are themselves checked against
   closed forms.

@@ -15,7 +15,7 @@ if(NUMSIM_FFT_ENABLE_MPI)
     target_link_libraries(distributed_r2c PRIVATE numsim-fft::numsim-fft)
     if(NUMSIM_FFT_BUILD_TESTS)
         add_test(NAME example_distributed_r2c
-                 COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 3 --oversubscribe
+                 COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 3 ${NUMSIM_FFT_MPIEXEC_PREFLAGS}
                          $<TARGET_FILE:distributed_r2c>)
     endif()
 endif()
