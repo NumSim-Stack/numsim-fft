@@ -10,6 +10,7 @@
 #include "core/error.h"
 #include "core/expected.h"
 #include "core/scalar_traits.h"
+#include "core/workspace.h"
 #include "execution/executor.h"
 #include "execution/sequential.h"
 #if defined(NUMSIM_FFT_HAS_OPENMP)

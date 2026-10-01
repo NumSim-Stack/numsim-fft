@@ -5,6 +5,7 @@
 #include "../core/error.h"
 #include "../core/expected.h"
 #include "../core/scalar_traits.h"
+#include "../core/workspace.h"
 #include "../execution/executor.h"
 #include "../execution/sequential.h"
 #include "../field/field.h"
@@ -61,9 +62,12 @@ struct plan_options {
  * (scalars, rank-2 and rank-4 tmech tensors); the component count comes
  * from the field type.
  *
- * Execution: forward(in, out, exec) and backward(in, out, exec) read `in`
- * once and never modify it. They may be called concurrently. For c2c and r2r
- * plans, `in` and `out` may be the same field.
+ * Execution: forward(in, out, exec, ws) and backward(in, out, exec, ws) read
+ * `in` and never modify it. Plans are immutable, so they may be called
+ * concurrently, each caller with its own workspace. For c2c and r2r plans,
+ * `in` and `out` may be the same field. In loops pass a workspace: it keeps
+ * the scratch buffers and the r2c backward copy, so no allocation happens
+ * after the first call.
  */
 template <real_scalar T, std::size_t Dim> class plan {
 public:
@@ -116,20 +120,47 @@ public:
     return n;
   }
 
-  /// Physical space -> spectral space.
+  /// Physical space -> spectral space. Without a workspace a temporary one
+  /// is used (allocates per call; pass a workspace in loops).
   template <typename EIn, typename AIn, typename EOut, typename AOut,
             executor Exec = sequential_executor>
-  [[nodiscard]] expected<void, error> forward(field<EIn, Dim, AIn> const &in, field<EOut, Dim, AOut> &out,
-                                     Exec const &exec = {}) const {
-    return run<true>(in, out, exec, scale(true));
+  [[nodiscard]] expected<void, error> forward(field<EIn, Dim, AIn> const &in,
+                                              field<EOut, Dim, AOut> &out,
+                                              Exec const &exec = {}) const {
+    workspace<T> ws;
+    return run<true>(in, out, exec, scale(true), ws);
+  }
+  template <typename EIn, typename AIn, typename EOut, typename AOut, executor Exec>
+  [[nodiscard]] expected<void, error> forward(field<EIn, Dim, AIn> const &in,
+                                              field<EOut, Dim, AOut> &out, Exec const &exec,
+                                              workspace<T> &ws) const {
+    return run<true>(in, out, exec, scale(true), ws);
+  }
+  template <typename EIn, typename AIn, typename EOut, typename AOut>
+  [[nodiscard]] expected<void, error> forward(field<EIn, Dim, AIn> const &in,
+                                              field<EOut, Dim, AOut> &out, workspace<T> &ws) const {
+    return run<true>(in, out, sequential_executor{}, scale(true), ws);
   }
 
   /// Spectral space -> physical space.
   template <typename EIn, typename AIn, typename EOut, typename AOut,
             executor Exec = sequential_executor>
-  [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in, field<EOut, Dim, AOut> &out,
-                                      Exec const &exec = {}) const {
-    return run<false>(in, out, exec, scale(false));
+  [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in,
+                                               field<EOut, Dim, AOut> &out,
+                                               Exec const &exec = {}) const {
+    workspace<T> ws;
+    return run<false>(in, out, exec, scale(false), ws);
+  }
+  template <typename EIn, typename AIn, typename EOut, typename AOut, executor Exec>
+  [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in,
+                                               field<EOut, Dim, AOut> &out, Exec const &exec,
+                                               workspace<T> &ws) const {
+    return run<false>(in, out, exec, scale(false), ws);
+  }
+  template <typename EIn, typename AIn, typename EOut, typename AOut>
+  [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in,
+                                               field<EOut, Dim, AOut> &out, workspace<T> &ws) const {
+    return run<false>(in, out, sequential_executor{}, scale(false), ws);
   }
 
 private:
@@ -141,8 +172,6 @@ private:
     std::optional<kernel::r2r_plan_1d<T>> r2r_forward;
     std::optional<kernel::r2r_plan_1d<T>> r2r_backward;
   };
-
-  using scratch_vector = std::vector<complex_type, aligned_allocator<complex_type>>;
 
   plan(extents_type const &shape, transform_domain domain, kinds_type const &kinds,
        plan_options const &options, std::optional<size_type> r2c_axis)
@@ -197,7 +226,7 @@ private:
    * are split into chunks. Each chunk owns its scratch.
    */
   template <typename In, typename Out, typename Op, typename Exec>
-  static void for_each_block(Exec const &exec, size_type outer, size_type inner,
+  static void for_each_block(Exec const &exec, workspace<T> &ws, size_type outer, size_type inner,
                              size_type in_slab, size_type out_slab, size_type block,
                              size_type scratch_len, In *in, Out *out, Op const &op) {
     if (outer == 0 || inner == 0)
@@ -207,22 +236,23 @@ private:
     // A few chunks per worker for load balance; one for a single worker.
     size_type const workers{std::max<size_type>(1, exec.concurrency())};
     size_type const chunks{std::min<size_type>(items, workers == 1 ? 1 : 4 * workers)};
+    ws.prepare_chunks(chunks);
     exec.bulk(chunks, [&](size_type chunk) {
-      scratch_vector scratch(scratch_len);
+      complex_type *const scratch_data{ws.chunk_scratch(chunk, scratch_len)};
       size_type const first{chunk * items / chunks};
       size_type const last{(chunk + 1) * items / chunks};
       for (size_type item{first}; item < last; ++item) {
         size_type const o{item / blocks_per_slab};
         size_type const b0{(item % blocks_per_slab) * block};
         size_type const B{std::min(block, inner - b0)};
-        op(in + o * in_slab + b0, out + o * out_slab + b0, B, scratch.data());
+        op(in + o * in_slab + b0, out + o * out_slab + b0, B, scratch_data);
       }
     });
   }
 
   /// Complex pass along `axis` (c2c, or r2r on real and imaginary parts).
   template <bool Forward, typename Exec>
-  void complex_pass(Exec const &exec, size_type axis, extents_type const &ext,
+  void complex_pass(Exec const &exec, workspace<T> &ws, size_type axis, extents_type const &ext,
                     size_type components, complex_type const *in, complex_type *out,
                     T scale_factor) const {
     size_type const outer{ext.outer(axis)}, n{ext[axis]};
@@ -231,7 +261,7 @@ private:
     if (ap.c2c) {
       auto const &k{*ap.c2c};
       size_type const block{block_size(k.scratch_size(1), inner)};
-      for_each_block(exec, outer, inner, n * inner, n * inner, block, k.scratch_size(block), in,
+      for_each_block(exec, ws, outer, inner, n * inner, n * inner, block, k.scratch_size(block), in,
                      out, [&](complex_type const *i, complex_type *o, size_type B, complex_type *s) {
                        if constexpr (Forward)
                          k.forward(i, inner, o, inner, B, s, scale_factor);
@@ -241,25 +271,26 @@ private:
     } else {
       // A complex line batch is a real batch of twice the width.
       auto const &k{Forward ? *ap.r2r_forward : *ap.r2r_backward};
-      real_pass_impl(exec, k, outer, n, 2 * inner, reinterpret_cast<T const *>(in),
+      real_pass_impl(exec, ws, k, outer, n, 2 * inner, reinterpret_cast<T const *>(in),
                      reinterpret_cast<T *>(out), scale_factor);
     }
   }
 
   /// Real r2r pass along `axis`.
   template <bool Forward, typename Exec>
-  void real_pass(Exec const &exec, size_type axis, extents_type const &ext, size_type components,
-                 T const *in, T *out, T scale_factor) const {
+  void real_pass(Exec const &exec, workspace<T> &ws, size_type axis, extents_type const &ext,
+                 size_type components, T const *in, T *out, T scale_factor) const {
     auto const &k{Forward ? *_axes[axis].r2r_forward : *_axes[axis].r2r_backward};
-    real_pass_impl(exec, k, ext.outer(axis), ext[axis], ext.inner(axis) * components, in, out,
+    real_pass_impl(exec, ws, k, ext.outer(axis), ext[axis], ext.inner(axis) * components, in, out,
                    scale_factor);
   }
 
   template <typename Exec>
-  void real_pass_impl(Exec const &exec, kernel::r2r_plan_1d<T> const &k, size_type outer,
-                      size_type n, size_type inner, T const *in, T *out, T scale_factor) const {
+  void real_pass_impl(Exec const &exec, workspace<T> &ws, kernel::r2r_plan_1d<T> const &k,
+                      size_type outer, size_type n, size_type inner, T const *in, T *out,
+                      T scale_factor) const {
     size_type const block{block_size(k.scratch_size(1), inner)};
-    for_each_block(exec, outer, inner, n * inner, n * inner, block, k.scratch_size(block), in, out,
+    for_each_block(exec, ws, outer, inner, n * inner, n * inner, block, k.scratch_size(block), in, out,
                    [&](T const *i, T *o, size_type B, complex_type *s) {
                      k.execute(i, inner, o, inner, B, s, scale_factor);
                    });
@@ -267,8 +298,8 @@ private:
 
   /// r2c (Forward) or c2r pass along the r2c axis.
   template <bool Forward, typename Exec, typename In, typename Out>
-  void half_spectrum_pass(Exec const &exec, size_type components, In const *in, Out *out,
-                          T scale_factor) const {
+  void half_spectrum_pass(Exec const &exec, workspace<T> &ws, size_type components, In const *in,
+                          Out *out, T scale_factor) const {
     size_type const axis{*_r2c_axis};
     auto const &k{*_axes[axis].r2c};
     size_type const outer{_physical.outer(axis)};
@@ -277,7 +308,7 @@ private:
     size_type const in_slab{(Forward ? n_real : n_spec) * inner};
     size_type const out_slab{(Forward ? n_spec : n_real) * inner};
     size_type const block{block_size(k.scratch_size(1), inner)};
-    for_each_block(exec, outer, inner, in_slab, out_slab, block, k.scratch_size(block), in, out,
+    for_each_block(exec, ws, outer, inner, in_slab, out_slab, block, k.scratch_size(block), in, out,
                    [&](In const *i, Out *o, size_type B, complex_type *s) {
                      if constexpr (Forward)
                        k.forward(i, inner, o, inner, B, s, scale_factor);
@@ -294,7 +325,7 @@ private:
 
   template <bool Forward, typename EIn, typename AIn, typename EOut, typename AOut, typename Exec>
   expected<void, error> run(field<EIn, Dim, AIn> const &in, field<EOut, Dim, AOut> &out,
-                            Exec const &exec, T const s) const {
+                            Exec const &exec, T const s, workspace<T> &ws) const {
     using in_scalar = typename field<EIn, Dim, AIn>::scalar_type;
     using out_scalar = typename field<EOut, Dim, AOut>::scalar_type;
     static_assert(field<EIn, Dim, AIn>::components == field<EOut, Dim, AOut>::components,
@@ -331,8 +362,9 @@ private:
         if (n_active == 0)
           copy_scaled(in.data(), out.data(), in.scalar_size(), s);
         for (size_type a{0}; a < n_active; ++a)
-          complex_pass<Forward>(exec, active[a], _physical, C, a == 0 ? in.data() : out.data(),
-                                out.data(), a + 1 == n_active ? s : T(1));
+          complex_pass<Forward>(exec, ws, active[a], _physical, C,
+                                a == 0 ? in.data() : out.data(), out.data(),
+                                a + 1 == n_active ? s : T(1));
         return {};
       }
       break;
@@ -341,28 +373,30 @@ private:
         if (n_active == 0)
           copy_scaled(in.data(), out.data(), in.scalar_size(), s);
         for (size_type a{0}; a < n_active; ++a)
-          real_pass<Forward>(exec, active[a], _physical, C, a == 0 ? in.data() : out.data(),
+          real_pass<Forward>(exec, ws, active[a], _physical, C, a == 0 ? in.data() : out.data(),
                              out.data(), a + 1 == n_active ? s : T(1));
         return {};
       }
       break;
     case transform_domain::real_to_complex:
       if constexpr (Forward && !in_complex && out_complex) {
-        half_spectrum_pass<true>(exec, C, in.data(), out.data(), n_active == 0 ? s : T(1));
+        half_spectrum_pass<true>(exec, ws, C, in.data(), out.data(), n_active == 0 ? s : T(1));
         for (size_type a{0}; a < n_active; ++a)
-          complex_pass<true>(exec, active[a], _spectral, C, out.data(), out.data(),
+          complex_pass<true>(exec, ws, active[a], _spectral, C, out.data(), out.data(),
                              a + 1 == n_active ? s : T(1));
         return {};
       } else if constexpr (!Forward && in_complex && !out_complex) {
         if (n_active == 0) {
-          half_spectrum_pass<false>(exec, C, in.data(), out.data(), s);
+          half_spectrum_pass<false>(exec, ws, C, in.data(), out.data(), s);
         } else {
           // The other axes go first and are done in place, on a copy of the
-          // input (the input is const).
-          scratch_vector work(in.data(), in.data() + in.scalar_size());
+          // input (the input is const); the copy lives in the workspace.
+          complex_type *const work{
+              ws.template buffer<complex_type>(workspace_slot::backward_copy, in.scalar_size())};
+          std::copy_n(in.data(), in.scalar_size(), work);
           for (size_type a{0}; a < n_active; ++a)
-            complex_pass<false>(exec, active[a], _spectral, C, work.data(), work.data(), T(1));
-          half_spectrum_pass<false>(exec, C, work.data(), out.data(), s);
+            complex_pass<false>(exec, ws, active[a], _spectral, C, work, work, T(1));
+          half_spectrum_pass<false>(exec, ws, C, work, out.data(), s);
         }
         return {};
       }

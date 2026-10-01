@@ -43,6 +43,9 @@ namespace numsim_fft {
  * agreed on by all ranks: if any rank's fields do not match, every rank
  * returns error::extents_mismatch and nobody enters the transpose. The plan
  * is move-only, so no rank can duplicate the communicator on its own.
+ *
+ * Pass a workspace in loops: the pre/post-transpose fields, the MPI pack
+ * buffers and the MPI layouts then persist between calls.
  */
 template <real_scalar T, std::size_t Dim> class distributed_plan {
   static_assert(Dim >= 2, "distributed_plan: slab decomposition needs Dim >= 2");
@@ -86,22 +89,34 @@ public:
   [[nodiscard]] expected<void, error> forward(field<EIn, Dim, AIn> const &in,
                                               field<EOut, Dim, AOut> &out,
                                               Exec const &exec = {}) const {
+    workspace<T> ws;
+    return forward(in, out, exec, ws);
+  }
+  template <typename EIn, typename AIn, typename EOut, typename AOut>
+  [[nodiscard]] expected<void, error> forward(field<EIn, Dim, AIn> const &in,
+                                              field<EOut, Dim, AOut> &out, workspace<T> &ws) const {
+    return forward(in, out, sequential_executor{}, ws);
+  }
+  template <typename EIn, typename AIn, typename EOut, typename AOut, executor Exec>
+  [[nodiscard]] expected<void, error> forward(field<EIn, Dim, AIn> const &in,
+                                              field<EOut, Dim, AOut> &out, Exec const &exec,
+                                              workspace<T> &ws) const {
     if (!all_ranks_match(in.extents() == _local_physical && out.extents() == _local_spectral))
       return unexpected(error::extents_mismatch);
     constexpr size_type C{field<EIn, Dim, AIn>::components};
     T const s{_scale_forward};
     if (_half_spectrum_on_axis0) {
       // real local phase, real transpose, then r2c along axis 0
-      field<EIn, Dim> a{_local.spectral_extents()};
-      field<EIn, Dim> b{_axis0.physical_extents()};
-      return _local.template run<true>(in, a, exec, T(1))
-          .and_then([&] { return transpose<true, C>(a, b); })
-          .and_then([&] { return _axis0.template run<true>(b, out, exec, s); });
+      auto &a{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
+      auto &b{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_b, _axis0.physical_extents())};
+      return _local.template run<true>(in, a, exec, T(1), ws)
+          .and_then([&] { return transpose<true, C>(a, b, ws); })
+          .and_then([&] { return _axis0.template run<true>(b, out, exec, s, ws); });
     }
-    field<EOut, Dim> a{_local.spectral_extents()};
-    return _local.template run<true>(in, a, exec, T(1))
-        .and_then([&] { return transpose<true, C>(a, out); })
-        .and_then([&] { return _axis0.template run<true>(out, out, exec, s); });
+    auto &a{temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
+    return _local.template run<true>(in, a, exec, T(1), ws)
+        .and_then([&] { return transpose<true, C>(a, out, ws); })
+        .and_then([&] { return _axis0.template run<true>(out, out, exec, s, ws); });
   }
 
   template <typename EIn, typename AIn, typename EOut, typename AOut,
@@ -109,22 +124,34 @@ public:
   [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in,
                                                field<EOut, Dim, AOut> &out,
                                                Exec const &exec = {}) const {
+    workspace<T> ws;
+    return backward(in, out, exec, ws);
+  }
+  template <typename EIn, typename AIn, typename EOut, typename AOut>
+  [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in,
+                                               field<EOut, Dim, AOut> &out, workspace<T> &ws) const {
+    return backward(in, out, sequential_executor{}, ws);
+  }
+  template <typename EIn, typename AIn, typename EOut, typename AOut, executor Exec>
+  [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in,
+                                               field<EOut, Dim, AOut> &out, Exec const &exec,
+                                               workspace<T> &ws) const {
     if (!all_ranks_match(in.extents() == _local_spectral && out.extents() == _local_physical))
       return unexpected(error::extents_mismatch);
     constexpr size_type C{field<EIn, Dim, AIn>::components};
     T const s{_scale_backward};
     if (_half_spectrum_on_axis0) {
-      field<EOut, Dim> b{_axis0.physical_extents()};
-      field<EOut, Dim> a{_local.spectral_extents()};
-      return _axis0.template run<false>(in, b, exec, T(1))
-          .and_then([&] { return transpose<false, C>(b, a); })
-          .and_then([&] { return _local.template run<false>(a, out, exec, s); });
+      auto &b{temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_b, _axis0.physical_extents())};
+      auto &a{temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
+      return _axis0.template run<false>(in, b, exec, T(1), ws)
+          .and_then([&] { return transpose<false, C>(b, a, ws); })
+          .and_then([&] { return _local.template run<false>(a, out, exec, s, ws); });
     }
-    field<EIn, Dim> b{_axis0.spectral_extents()};
-    field<EIn, Dim> a{_local.spectral_extents()};
-    return _axis0.template run<false>(in, b, exec, T(1))
-        .and_then([&] { return transpose<false, C>(b, a); })
-        .and_then([&] { return _local.template run<false>(a, out, exec, s); });
+    auto &b{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_b, _axis0.spectral_extents())};
+    auto &a{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
+    return _axis0.template run<false>(in, b, exec, T(1), ws)
+        .and_then([&] { return transpose<false, C>(b, a, ws); })
+        .and_then([&] { return _local.template run<false>(a, out, exec, s, ws); });
   }
 
 private:
@@ -167,6 +194,13 @@ private:
     return plan<T, Dim>::create(_local_spectral, domain, kinds, options).value();
   }
 
+  /// Field of the given extents kept in the workspace (rebuilt on change).
+  template <typename F>
+  static F &temporary(workspace<T> &ws, size_type slot, extents_type const &e) {
+    return ws.template object<F>(
+        slot, [&] { return F{e}; }, [&](F const &f) { return f.extents() == e; });
+  }
+
   /// Collective agreement on a local condition (logical and over ranks).
   bool all_ranks_match(bool local) const {
     int ok{local ? 1 : 0};
@@ -176,7 +210,8 @@ private:
 
   /// rows <-> cols redistribution of the first two axes.
   template <bool RowsToCols, size_type C, typename E1, typename A1, typename E2, typename A2>
-  expected<void, error> transpose(field<E1, Dim, A1> const &src, field<E2, Dim, A2> &dst) const {
+  expected<void, error> transpose(field<E1, Dim, A1> const &src, field<E2, Dim, A2> &dst,
+                                  workspace<T> &ws) const {
     using S = typename field<E1, Dim, A1>::scalar_type;
     // src/dst of the transpose share axes 2.. with the global spectral grid,
     // except in the axis-0 half-spectrum case (then the physical grid).
@@ -185,9 +220,9 @@ private:
     if (!t.fits_int()) // same verdict on every rank
       return unexpected(error::message_too_large);
     if constexpr (RowsToCols)
-      t.rows_to_cols(src.data(), dst.data());
+      t.rows_to_cols(src.data(), dst.data(), ws);
     else
-      t.cols_to_rows(src.data(), dst.data());
+      t.cols_to_rows(src.data(), dst.data(), ws);
     return {};
   }
 

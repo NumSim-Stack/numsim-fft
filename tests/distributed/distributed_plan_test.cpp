@@ -58,7 +58,16 @@ void check(extents<D> const &e, transform_domain domain, std::array<ak, D> const
   auto const local_in{slab(global_in, 0, dist.physical_offset(),
                            dist.local_physical_extents()[0])};
   field<EOut, D> local_out{dist.local_spectral_extents()};
-  ASSERT_TRUE(dist.forward(local_in, local_out, exec).has_value());
+  workspace<T> ws;
+  ASSERT_TRUE(dist.forward(local_in, local_out, exec, ws).has_value());
+  {
+    // the workspace path and the temporary path agree exactly
+    field<EOut, D> again{dist.local_spectral_extents()};
+    ASSERT_TRUE(dist.forward(local_in, again, exec).has_value());
+    EXPECT_TRUE(std::ranges::equal(again.scalars(), local_out.scalars()));
+    ASSERT_TRUE(dist.forward(local_in, again, exec, ws).has_value()); // reuse
+    EXPECT_TRUE(std::ranges::equal(again.scalars(), local_out.scalars()));
+  }
   auto const expected{slab(global_out, 1, dist.spectral_offset(),
                            dist.local_spectral_extents()[1])};
   EXPECT_LT(test::relative_error(local_out.scalars(), expected.scalars()),
@@ -66,7 +75,7 @@ void check(extents<D> const &e, transform_domain domain, std::array<ak, D> const
       << "rank " << world().rank();
 
   field<EIn, D> local_back{dist.local_physical_extents()};
-  ASSERT_TRUE(dist.backward(local_out, local_back, exec).has_value());
+  ASSERT_TRUE(dist.backward(local_out, local_back, exec, ws).has_value());
   EXPECT_LT(test::relative_error(local_back.scalars(), local_in.scalars()),
             test::tolerance<T>(e.size(), 16))
       << "rank " << world().rank();

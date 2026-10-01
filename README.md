@@ -90,6 +90,13 @@ for (std::size_t p = 0; p < eps_hat.size(); ++p)
   eps_hat.point(p) = tmech::eval(tmech::dcontract(C, eps_hat.point(p)));
 plan.backward(eps_hat, eps, openmp_executor{});      // any executor
 
+// in loops: a workspace keeps all temporaries, no allocation after the first call
+workspace<double> ws;
+for (int it = 0; it < 1000; ++it) {
+  plan.forward(eps, eps_hat, openmp_executor{}, ws).value();
+  plan.backward(eps_hat, eps, openmp_executor{}, ws).value();
+}
+
 // mixed axis kinds: DCT-II along x, periodic along y, DST-I along z
 auto p2 = make_r2c_plan<double>(extents{32, 32, 16},
                                 {axis_kind::dct2, axis_kind::periodic, axis_kind::dst1});
@@ -149,6 +156,10 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 - **r2c:** r2c runs first along the half-spectrum axis. The c2c and r2r
   passes then run on the complex data; a complex batch is a real batch of
   twice the width. `backward` works on a copy of its input and never modifies it.
+- **Workspaces** (`workspace<T>`) hold kernel scratch per chunk, the r2c
+  backward copy, and the distributed temporaries, pack buffers and MPI
+  layouts. One workspace per thread; plans stay immutable and shareable.
+  Without one, a call uses a temporary workspace (allocates).
 - **Executors** model `executor`: `concurrency()` and `bulk(n, f)`.
   Exceptions from work items are rethrown on the caller.
 - **Distributed plans** are a local plan (`identity` on axis 0), one
@@ -175,6 +186,6 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 
 - Pencil decomposition (2D process grids via MPL cartesian communicators),
   distributed 1D transforms, and HPX distributed (parcelport) backend.
-- Radix-8/16 butterflies and explicit SIMD; cached workspaces for the
-  distributed temporaries.
+- Radix-8/16 butterflies and explicit SIMD; a destructive c2r variant that
+  avoids the input copy.
 - Lippmann–Schwinger / Moulinec–Suquet solver on top of the field and plan API.
