@@ -25,10 +25,10 @@ homogenisation.
 
 | | |
 |---|---|
-| Compiler | GCC ≥ 13 or Clang ≥ 18 (C++23) |
+| Compiler | GCC ≥ 13 or Clang ≥ 19: C++23 with `std::expected` (libstdc++ hides it from Clang 18) |
 | CMake | ≥ 3.25 |
 | Required | tmech (sibling checkout `../tmech`, installed, or fetched) |
-| Fallbacks (always available; the headers pick `std::` when the consuming compiler has it) | kokkos/mdspan for `std::mdspan`, tl::expected for `std::expected` (Clang 18 with libstdc++ 13 hides it) |
+| Fallback (always available; the header picks `std::mdspan` when the consuming compiler has it) | kokkos/mdspan |
 | Optional | OpenMP, HPX ≥ 1.11, MPI (+ MPL, fetched if not installed), GoogleTest (tests) |
 
 Each dependency is found with `find_package` when installed. If it isn't,
@@ -141,7 +141,7 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 | r2c | the **last periodic axis** holds `n/2+1` values. c2r ignores the imaginary parts of the DC and Nyquist entries |
 | r2r | FFTW REDFT00/10/01/11 and RODFT00/10/01/11, unnormalised. Inverse pairs are I↔I, II↔III and IV↔IV (`inverse_kind`); the plan's `backward` applies them |
 | Normalisation | `plan_options{.norm = …}`. `backward` (default) scales the backward transform by 1/N, `ortho` scales both by 1/√N, `none` scales neither. N = ∏ `logical_size(kind, n)`: n for periodic, 2(n−1) for DCT-I, 2(n+1) for DST-I, 2n otherwise |
-| Errors | plan creation and execution return `expected<…, error>`; `to_string(error)`. Note: `expected<void, error>` has no `value()` with the tl::expected fallback, so test with `if (!r)` |
+| Errors | plan creation and execution return `std::expected<…, error>`; `to_string(error)` |
 
 ## Design
 

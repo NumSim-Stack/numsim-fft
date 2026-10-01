@@ -37,11 +37,12 @@ endif()
 target_link_libraries(${PROJECT_NAME} INTERFACE tmech::tmech)
 
 # ---------------------------------------------------------------------------
-# mdspan and expected fallbacks. The headers pick std::mdspan / std::expected
-# when the *consuming* compiler's standard library has them and the Kokkos
-# reference mdspan / tl::expected otherwise (core/mdspan.h, core/expected.h).
-# Both fallbacks are therefore always made available: a header-only library
-# must not bake its own compiler's feature set into the installed package.
+# mdspan fallback. core/mdspan.h picks std::mdspan when the *consuming*
+# compiler's standard library has it (libstdc++ >= 14) and the Kokkos
+# reference implementation otherwise, so the fallback is always made
+# available: a header-only library must not bake its own compiler's feature
+# set into the installed package. (std::expected has no fallback: it is part
+# of the toolchain baseline, GCC >= 13 / Clang >= 19.)
 # ---------------------------------------------------------------------------
 set(MDSPAN_CXX_STANDARD 23 CACHE STRING "" FORCE)
 FetchContent_Declare(mdspan
@@ -53,17 +54,6 @@ FetchContent_Declare(mdspan
     FIND_PACKAGE_ARGS)
 FetchContent_MakeAvailable(mdspan)
 target_link_libraries(${PROJECT_NAME} INTERFACE mdspan::mdspan)
-
-set(EXPECTED_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
-set(EXPECTED_BUILD_PACKAGE OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(tl-expected
-    GIT_REPOSITORY https://github.com/TartanLlama/expected.git
-    GIT_TAG        v1.3.1
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    FIND_PACKAGE_ARGS NAMES tl-expected)
-FetchContent_MakeAvailable(tl-expected)
-target_link_libraries(${PROJECT_NAME} INTERFACE tl::expected)
 
 # ---------------------------------------------------------------------------
 # OpenMP executor (optional)

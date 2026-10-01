@@ -4,9 +4,8 @@ include(CMakeFindDependencyMacro)
 
 find_dependency(tmech CONFIG)
 
-# The headers choose std:: or these fallbacks per consuming compiler.
+# The headers choose std::mdspan or this fallback per consuming compiler.
 find_dependency(mdspan)
-find_dependency(tl-expected)
 
 if(@NUMSIM_FFT_ENABLE_OPENMP@)
     find_dependency(OpenMP COMPONENTS CXX)

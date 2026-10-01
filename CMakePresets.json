@@ -14,7 +14,7 @@
     { "name": "gcc", "hidden": true, "inherits": "base",
       "cacheVariables": { "CMAKE_CXX_COMPILER": "g++" } },
     { "name": "clang", "hidden": true, "inherits": "base",
-      "cacheVariables": { "CMAKE_CXX_COMPILER": "clang++" } },
+      "cacheVariables": { "CMAKE_CXX_COMPILER": "clang++-19" } },
 
     { "name": "gcc-debug",     "inherits": "gcc",   "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
     { "name": "gcc-release",   "inherits": "gcc",   "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
