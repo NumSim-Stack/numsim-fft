@@ -35,17 +35,32 @@ R chunked_sum(std::size_t n, Exec const &exec, F const &f) {
     return R{};
   std::size_t const chunks{std::min<std::size_t>(reduction_chunks, n)};
   std::vector<R> partial(chunks);
-  exec.bulk(chunks, [&](std::size_t c) {
-    partial[c] = f(c * n / chunks, (c + 1) * n / chunks);
-  });
+  exec.bulk(chunks, [&](std::size_t c) { partial[c] = f(c * n / chunks, (c + 1) * n / chunks); });
   R sum{};
   for (auto const &p : partial)
     sum += p;
   return sum;
 }
 
-template <typename Exec, typename F>
-void chunked_for(std::size_t n, Exec const &exec, F const &f) {
+/// Sum of f(i) over [i0, i1) with `lanes` independent accumulators, so the
+/// loop vectorises without reassociation flags; the summation order is
+/// fixed, hence the result is reproducible.
+template <typename R, std::size_t lanes = 8, typename F>
+R lane_sum(std::size_t i0, std::size_t i1, F const &f) {
+  R acc[lanes]{};
+  std::size_t i{i0};
+  for (; i + lanes <= i1; i += lanes)
+    for (std::size_t l{0}; l < lanes; ++l)
+      acc[l] += f(i + l);
+  for (std::size_t l{0}; i < i1; ++i, ++l)
+    acc[l] += f(i);
+  R sum{};
+  for (std::size_t l{0}; l < lanes; ++l)
+    sum += acc[l];
+  return sum;
+}
+
+template <typename Exec, typename F> void chunked_for(std::size_t n, Exec const &exec, F const &f) {
   if (n == 0)
     return;
   std::size_t const workers{std::max<std::size_t>(1, exec.concurrency())};
@@ -60,16 +75,14 @@ template <typename E, std::size_t D, typename A, executor Exec = sequential_exec
 auto dot(field<E, D, A> const &a, field<E, D, A> const &b, Exec const &exec = {}) {
   using S = typename field<E, D, A>::scalar_type;
   return detail::chunked_sum<S>(a.scalar_size(), exec, [&](std::size_t i0, std::size_t i1) {
-    S s{};
-    S const *pa{a.data()};
-    S const *pb{b.data()};
-    for (std::size_t i{i0}; i < i1; ++i) {
+    S const *__restrict pa{a.data()};
+    S const *__restrict pb{b.data()};
+    return detail::lane_sum<S>(i0, i1, [&](std::size_t i) {
       if constexpr (is_complex_v<S>)
-        s += std::conj(pa[i]) * pb[i];
+        return std::conj(pa[i]) * pb[i];
       else
-        s += pa[i] * pb[i];
-    }
-    return s;
+        return pa[i] * pb[i];
+    });
   });
 }
 
@@ -79,11 +92,9 @@ auto norm2(field<E, D, A> const &a, Exec const &exec = {}) {
   using S = typename field<E, D, A>::scalar_type;
   using R = real_type_t<S>;
   return detail::chunked_sum<R>(a.scalar_size(), exec, [&](std::size_t i0, std::size_t i1) {
-    R s{};
-    S const *pa{a.data()};
-    for (std::size_t i{i0}; i < i1; ++i)
-      s += static_cast<R>(std::norm(pa[i]));
-    return s;
+    S const *__restrict pa{a.data()};
+    return detail::lane_sum<R>(i0, i1,
+                               [&](std::size_t i) { return static_cast<R>(std::norm(pa[i])); });
   });
 }
 
