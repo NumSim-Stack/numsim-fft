@@ -52,9 +52,7 @@ inline std::size_t largest_prime_factor(std::size_t n) {
   return n > 1 ? n : largest;
 }
 
-inline bool needs_bluestein(std::size_t n) {
-  return largest_prime_factor(n) > max_direct_radix;
-}
+inline bool needs_bluestein(std::size_t n) { return largest_prime_factor(n) > max_direct_radix; }
 
 /// Smallest power of two >= n.
 constexpr std::size_t next_power_of_two(std::size_t n) noexcept {

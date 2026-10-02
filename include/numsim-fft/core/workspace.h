@@ -90,13 +90,11 @@ private:
 
 /// Slots used by the library's plans (users may use any slot >= user_base).
 namespace workspace_slot {
-inline constexpr std::size_t backward_copy{
-    0}; ///< plan: r2c backward intermediate
-inline constexpr std::size_t transpose_a{
-    1}; ///< distributed: pre/post-transpose field
-inline constexpr std::size_t transpose_b{2}; ///< distributed: transposed field
-inline constexpr std::size_t send{3};    ///< distributed: packed send buffer
-inline constexpr std::size_t receive{4}; ///< distributed: packed receive buffer
+inline constexpr std::size_t backward_copy{0};   ///< plan: r2c backward intermediate
+inline constexpr std::size_t transpose_a{1};     ///< distributed: pre/post-transpose field
+inline constexpr std::size_t transpose_b{2};     ///< distributed: transposed field
+inline constexpr std::size_t send{3};            ///< distributed: packed send buffer
+inline constexpr std::size_t receive{4};         ///< distributed: packed receive buffer
 inline constexpr std::size_t transpose_cache{5}; ///< distributed: MPI layouts
 inline constexpr std::size_t user_base{16};
 } // namespace workspace_slot

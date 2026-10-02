@@ -36,8 +36,7 @@ public:
 
   explicit r2c_plan_1d(size_type n)
       : _n{n}, _packed{n != 0 && n % 2 == 0},
-        _fft{n == 0 ? throw std::invalid_argument(
-                          "r2c_plan_1d: length must be positive")
+        _fft{n == 0 ? throw std::invalid_argument("r2c_plan_1d: length must be positive")
                     : (_packed ? n / 2 : n)} {
     if (_packed) {
       _twiddles.reserve(n / 2 + 1);
@@ -53,9 +52,8 @@ public:
     return _fft.size() * B + _fft.scratch_size(B);
   }
 
-  void forward(T const *in, size_type in_stride, complex_type *out,
-               size_type out_stride, size_type B, complex_type *scratch,
-               T scale_factor = T(1)) const noexcept {
+  void forward(T const *in, size_type in_stride, complex_type *out, size_type out_stride,
+               size_type B, complex_type *scratch, T scale_factor = T(1)) const noexcept {
     size_type const m{_fft.size()};
     complex_type *z{scratch};
     complex_type *fft_scratch{scratch + m * B};
@@ -65,22 +63,20 @@ public:
       T *const zs{reinterpret_cast<T *>(z)};
       split<T> const zz{zs, zs + m * B};
       _fft.core().transform(
-          typename stockham<T>::template layout<T const *, 1>{
-              in, in + in_stride, 2 * in_stride},
+          typename stockham<T>::template layout<T const *, 1>{in, in + in_stride, 2 * in_stride},
           stockham<T>::to(zz, B), B, fft_scratch, T(1), false);
       T const half{T(0.5) * scale_factor};
       for (size_type k{0}; k <= m; ++k) {
         size_type const k1{k == m ? 0 : k};
         size_type const k2{k == 0 ? 0 : m - k};
-        separate(B, zz.re + k1 * B, zz.im + k1 * B, zz.re + k2 * B,
-                 zz.im + k2 * B, reinterpret_cast<T *>(out + k * out_stride),
-                 _twiddles[k].real(), _twiddles[k].imag(), half);
+        separate(B, zz.re + k1 * B, zz.im + k1 * B, zz.re + k2 * B, zz.im + k2 * B,
+                 reinterpret_cast<T *>(out + k * out_stride), _twiddles[k].real(),
+                 _twiddles[k].imag(), half);
       }
     } else if (_packed) {
       for (size_type j{0}; j < m; ++j)
         for (size_type b{0}; b < B; ++b)
-          z[j * B + b] = {in[(2 * j) * in_stride + b],
-                          in[(2 * j + 1) * in_stride + b]};
+          z[j * B + b] = {in[(2 * j) * in_stride + b], in[(2 * j + 1) * in_stride + b]};
       _fft.forward(z, B, z, B, B, fft_scratch);
       T const half{T(0.5) * scale_factor};
       for (size_type k{0}; k <= m; ++k) {
@@ -105,9 +101,8 @@ public:
     }
   }
 
-  void backward(complex_type const *in, size_type in_stride, T *out,
-                size_type out_stride, size_type B, complex_type *scratch,
-                T scale_factor = T(1)) const noexcept {
+  void backward(complex_type const *in, size_type in_stride, T *out, size_type out_stride,
+                size_type B, complex_type *scratch, T scale_factor = T(1)) const noexcept {
     size_type const m{_fft.size()};
     complex_type *z{scratch};
     complex_type *fft_scratch{scratch + m * B};
@@ -120,13 +115,12 @@ public:
       T const *const ib{reinterpret_cast<T const *>(in)};
       merge_dc(B, ib, ib + 2 * m * in_stride, zz.re, zz.im);
       for (size_type k{1}; k < m; ++k)
-        merge(B, ib + 2 * k * in_stride, ib + 2 * (m - k) * in_stride,
-              zz.re + k * B, zz.im + k * B, _twiddles[k].real(),
-              _twiddles[k].imag());
-      _fft.core().transform(stockham<T>::from(zz, B),
-                            typename stockham<T>::template layout<T *, 1>{
-                                out, out + out_stride, 2 * out_stride},
-                            B, fft_scratch, scale_factor, true);
+        merge(B, ib + 2 * k * in_stride, ib + 2 * (m - k) * in_stride, zz.re + k * B, zz.im + k * B,
+              _twiddles[k].real(), _twiddles[k].imag());
+      _fft.core().transform(
+          stockham<T>::from(zz, B),
+          typename stockham<T>::template layout<T *, 1>{out, out + out_stride, 2 * out_stride}, B,
+          fft_scratch, scale_factor, true);
     } else if (_packed) {
       for (size_type k{0}; k < m; ++k) {
         for (size_type b{0}; b < B; ++b) {
@@ -136,16 +130,14 @@ public:
             xk = {xk.real(), T(0)};
             xc = {xc.real(), T(0)};
           }
-          z[k * B + b] =
-              (xk + xc) + mul_i(cmul(xk - xc, std::conj(_twiddles[k])));
+          z[k * B + b] = (xk + xc) + mul_i(cmul(xk - xc, std::conj(_twiddles[k])));
         }
       }
       _fft.backward(z, B, z, B, B, fft_scratch);
       for (size_type j{0}; j < m; ++j)
         for (size_type b{0}; b < B; ++b) {
           out[(2 * j) * out_stride + b] = z[j * B + b].real() * scale_factor;
-          out[(2 * j + 1) * out_stride + b] =
-              z[j * B + b].imag() * scale_factor;
+          out[(2 * j + 1) * out_stride + b] = z[j * B + b].imag() * scale_factor;
         }
     } else {
       // Rebuild the full Hermitian spectrum, then a complex backward FFT.
@@ -167,9 +159,8 @@ public:
 private:
   /// X_k = half * (E_k + w^k O_k) from Z_k (zk) and Z_{h-k} (zc), written
   /// interleaved to `out`.
-  static void separate(size_type B, T const *zkr, T const *zki, T const *zcr,
-                       T const *zci, T *__restrict out, T wr, T wi,
-                       T half) noexcept {
+  static void separate(size_type B, T const *zkr, T const *zki, T const *zcr, T const *zci,
+                       T *__restrict out, T wr, T wi, T half) noexcept {
     for (size_type b{0}; b < B; ++b) {
       T const er{zkr[b] + zcr[b]}, ei{zki[b] - zci[b]};
       // o = -i (zk - conj zc)
@@ -180,11 +171,10 @@ private:
   }
 
   /// Z_k from X_k (xk, interleaved) and X_{h-k} (xc, interleaved), 0 < k < h.
-  static void merge(size_type B, T const *xk, T const *xc, T *__restrict zr,
-                    T *__restrict zi, T wr, T wi) noexcept {
+  static void merge(size_type B, T const *xk, T const *xc, T *__restrict zr, T *__restrict zi, T wr,
+                    T wi) noexcept {
     for (size_type b{0}; b < B; ++b) {
-      T const xkr{xk[2 * b]}, xki{xk[2 * b + 1]}, xcr{xc[2 * b]},
-          xci{-xc[2 * b + 1]};
+      T const xkr{xk[2 * b]}, xki{xk[2 * b + 1]}, xcr{xc[2 * b]}, xci{-xc[2 * b + 1]};
       // c = (xk - conj xc) conj(w); Z = (xk + conj xc) + i c
       T const dr{xkr - xcr}, di{xki - xci};
       T const cr{dr * wr + di * wi}, ci{di * wr - dr * wi};

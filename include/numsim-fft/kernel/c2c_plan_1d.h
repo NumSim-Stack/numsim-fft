@@ -31,8 +31,7 @@ public:
   using size_type = std::size_t;
   using value_type = cplx<T>;
 
-  explicit c2c_plan_1d(size_type n)
-      : _n{n}, _bluestein_used{needs_bluestein(n)} {
+  explicit c2c_plan_1d(size_type n) : _n{n}, _bluestein_used{needs_bluestein(n)} {
     if (n == 0)
       throw std::invalid_argument("c2c_plan_1d: length must be positive");
     if (_bluestein_used)
@@ -48,18 +47,15 @@ public:
   stockham<T> const &core() const noexcept { return _stockham; }
 
   size_type scratch_size(size_type B) const noexcept {
-    return _bluestein_used ? _bluestein.scratch_size(B)
-                           : _stockham.scratch_size(B);
+    return _bluestein_used ? _bluestein.scratch_size(B) : _stockham.scratch_size(B);
   }
 
   template <direction Dir>
-  void execute(value_type const *in, size_type in_stride, value_type *out,
-               size_type out_stride, size_type B, value_type *scratch,
-               T scale_factor = T(1)) const noexcept {
+  void execute(value_type const *in, size_type in_stride, value_type *out, size_type out_stride,
+               size_type B, value_type *scratch, T scale_factor = T(1)) const noexcept {
     constexpr bool backward{Dir == direction::backward};
     if (!_bluestein_used) {
-      _stockham.execute(in, in_stride, out, out_stride, B, scratch,
-                        scale_factor, backward);
+      _stockham.execute(in, in_stride, out, out_stride, B, scratch, scale_factor, backward);
       return;
     }
     // Bluestein works in split layout: backward as conj(F(conj x)), with
@@ -70,28 +66,22 @@ public:
       return value_type{v.real(), sign * v.imag()};
     };
     const_split<T> const result{_bluestein.run(load, B, scratch)};
-    interleave(result.re, result.im, out, out_stride, _n, B, scale_factor,
-               sign * scale_factor);
+    interleave(result.re, result.im, out, out_stride, _n, B, scale_factor, sign * scale_factor);
   }
 
-  void forward(value_type const *in, size_type in_stride, value_type *out,
-               size_type out_stride, size_type B, value_type *scratch,
-               T scale_factor = T(1)) const noexcept {
-    execute<direction::forward>(in, in_stride, out, out_stride, B, scratch,
-                                scale_factor);
+  void forward(value_type const *in, size_type in_stride, value_type *out, size_type out_stride,
+               size_type B, value_type *scratch, T scale_factor = T(1)) const noexcept {
+    execute<direction::forward>(in, in_stride, out, out_stride, B, scratch, scale_factor);
   }
 
-  void backward(value_type const *in, size_type in_stride, value_type *out,
-                size_type out_stride, size_type B, value_type *scratch,
-                T scale_factor = T(1)) const noexcept {
-    execute<direction::backward>(in, in_stride, out, out_stride, B, scratch,
-                                 scale_factor);
+  void backward(value_type const *in, size_type in_stride, value_type *out, size_type out_stride,
+                size_type B, value_type *scratch, T scale_factor = T(1)) const noexcept {
+    execute<direction::backward>(in, in_stride, out, out_stride, B, scratch, scale_factor);
   }
 
 private:
-  static void interleave(T const *__restrict re, T const *__restrict im,
-                         value_type *__restrict out, size_type out_stride,
-                         size_type n, size_type B, T re_scale,
+  static void interleave(T const *__restrict re, T const *__restrict im, value_type *__restrict out,
+                         size_type out_stride, size_type n, size_type B, T re_scale,
                          T im_scale) noexcept {
     for (size_type j{0}; j < n; ++j) {
       T const *__restrict rr{re + j * B};

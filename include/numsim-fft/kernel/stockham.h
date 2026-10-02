@@ -89,12 +89,8 @@ public:
     size_type row;
   };
 
-  static layout<T const *, 1> from(split<T> a, size_type B) noexcept {
-    return {a.re, a.im, B};
-  }
-  static layout<T *, 1> to(split<T> a, size_type B) noexcept {
-    return {a.re, a.im, B};
-  }
+  static layout<T const *, 1> from(split<T> a, size_type B) noexcept { return {a.re, a.im, B}; }
+  static layout<T *, 1> to(split<T> a, size_type B) noexcept { return {a.re, a.im, B}; }
 
   /**
    * @brief Transform of B interleaved lines: element j of line b is at
@@ -102,14 +98,12 @@ public:
    * by `scale`; `backward` selects the inverse (unnormalised) transform.
    * Input and output may be the same memory.
    */
-  void execute(cplx<T> const *in, size_type in_stride, cplx<T> *out,
-               size_type out_stride, size_type B, cplx<T> *scratch, T scale,
-               bool backward) const noexcept {
+  void execute(cplx<T> const *in, size_type in_stride, cplx<T> *out, size_type out_stride,
+               size_type B, cplx<T> *scratch, T scale, bool backward) const noexcept {
     T const *const ib{reinterpret_cast<T const *>(in)};
     T *const ob{reinterpret_cast<T *>(out)};
     transform(layout<T const *, 2>{ib, ib + 1, 2 * in_stride},
-              layout<T *, 2>{ob, ob + 1, 2 * out_stride}, B, scratch, scale,
-              backward);
+              layout<T *, 2>{ob, ob + 1, 2 * out_stride}, B, scratch, scale, backward);
   }
 
   /**
@@ -118,8 +112,8 @@ public:
    * output may overlap.
    */
   template <typename PX, size_type XS, size_type YS>
-  void transform(layout<PX, XS> x, layout<T *, YS> y, size_type B,
-                 cplx<T> *scratch, T scale, bool backward) const noexcept {
+  void transform(layout<PX, XS> x, layout<T *, YS> y, size_type B, cplx<T> *scratch, T scale,
+                 bool backward) const noexcept {
     if (backward) { // swap(z) = i conj(z): swap(F(swap x)) = conj(F(conj x))
       std::swap(x.re, x.im);
       std::swap(y.re, y.im);
@@ -136,8 +130,7 @@ public:
       // when the ranges overlap.
       if (overlap(x, y, B)) {
         for (size_type j{0}; j < _n; ++j)
-          copy_row<XS, 1>(B, x.re + j * x.row, x.im + j * x.row, a.re + j * B,
-                          a.im + j * B, T(1));
+          copy_row<XS, 1>(B, x.re + j * x.row, x.im + j * x.row, a.re + j * B, a.im + j * B, T(1));
         run_stage<true>(_stages[0], from(a, B), y, B, scale);
       } else {
         run_stage<true>(_stages[0], x, y, B, scale);
@@ -185,8 +178,8 @@ private:
   }
 
   template <size_type XS, size_type YS>
-  static void copy_row(size_type B, T const *xr, T const *xi, T *__restrict yr,
-                       T *__restrict yi, T scale) noexcept {
+  static void copy_row(size_type B, T const *xr, T const *xi, T *__restrict yr, T *__restrict yi,
+                       T scale) noexcept {
     for (size_type b{0}; b < B; ++b) {
       yr[YS * b] = xr[XS * b] * scale;
       yi[YS * b] = xi[XS * b] * scale;
@@ -194,55 +187,42 @@ private:
   }
 
   template <typename PX, size_type XS, size_type YS>
-  bool overlap(layout<PX, XS> x, layout<T *, YS> y,
-               size_type B) const noexcept {
+  bool overlap(layout<PX, XS> x, layout<T *, YS> y, size_type B) const noexcept {
     T const *const xlo{std::min(x.re, x.im)};
-    T const *const xhi{std::max(x.re, x.im) + (_n - 1) * x.row + XS * (B - 1) +
-                       1};
+    T const *const xhi{std::max(x.re, x.im) + (_n - 1) * x.row + XS * (B - 1) + 1};
     T const *const ylo{std::min(y.re, y.im)};
-    T const *const yhi{std::max(y.re, y.im) + (_n - 1) * y.row + YS * (B - 1) +
-                       1};
+    T const *const yhi{std::max(y.re, y.im) + (_n - 1) * y.row + YS * (B - 1) + 1};
     return xlo < yhi && ylo < xhi;
   }
 
   template <bool Last, typename PX, size_type XS, size_type YS>
-  void run_stage(stage const &st, layout<PX, XS> x, layout<T *, YS> y,
-                 size_type B, T scale) const noexcept {
+  void run_stage(stage const &st, layout<PX, XS> x, layout<T *, YS> y, size_type B,
+                 T scale) const noexcept {
     switch (st.radix) {
     case 2:
-      stage_loop<2>(
-          st, x, y, B,
-          [=](size_type B, rows<2> const &o, cplx<T> const *w, auto tw) {
-            radix2<decltype(tw)::value, XS, YS, Last>(B, o, w, scale);
-          });
+      stage_loop<2>(st, x, y, B, [=](size_type B, rows<2> const &o, cplx<T> const *w, auto tw) {
+        radix2<decltype(tw)::value, XS, YS, Last>(B, o, w, scale);
+      });
       break;
     case 3:
-      stage_loop<3>(
-          st, x, y, B,
-          [=](size_type B, rows<3> const &o, cplx<T> const *w, auto tw) {
-            radix3<decltype(tw)::value, XS, YS, Last>(B, o, w, scale);
-          });
+      stage_loop<3>(st, x, y, B, [=](size_type B, rows<3> const &o, cplx<T> const *w, auto tw) {
+        radix3<decltype(tw)::value, XS, YS, Last>(B, o, w, scale);
+      });
       break;
     case 4:
-      stage_loop<4>(
-          st, x, y, B,
-          [=](size_type B, rows<4> const &o, cplx<T> const *w, auto tw) {
-            radix4<decltype(tw)::value, XS, YS, Last>(B, o, w, scale);
-          });
+      stage_loop<4>(st, x, y, B, [=](size_type B, rows<4> const &o, cplx<T> const *w, auto tw) {
+        radix4<decltype(tw)::value, XS, YS, Last>(B, o, w, scale);
+      });
       break;
     case 5:
-      stage_loop<5>(
-          st, x, y, B,
-          [=](size_type B, rows<5> const &o, cplx<T> const *w, auto tw) {
-            radix5<decltype(tw)::value, XS, YS, Last>(B, o, w, scale);
-          });
+      stage_loop<5>(st, x, y, B, [=](size_type B, rows<5> const &o, cplx<T> const *w, auto tw) {
+        radix5<decltype(tw)::value, XS, YS, Last>(B, o, w, scale);
+      });
       break;
     case 8:
-      stage_loop<8>(
-          st, x, y, B,
-          [=](size_type B, rows<8> const &o, cplx<T> const *w, auto tw) {
-            radix8<decltype(tw)::value, XS, YS, Last>(B, o, w, scale);
-          });
+      stage_loop<8>(st, x, y, B, [=](size_type B, rows<8> const &o, cplx<T> const *w, auto tw) {
+        radix8<decltype(tw)::value, XS, YS, Last>(B, o, w, scale);
+      });
       break;
     default:
       generic_stage<Last>(st, x, y, B, scale);
@@ -250,10 +230,9 @@ private:
   }
 
   /// Runs `butterfly(B, rows, twiddles, twiddle_flag)` for every (p, q).
-  template <size_type R, typename PX, size_type XS, size_type YS,
-            typename Butterfly>
-  void stage_loop(stage const &st, layout<PX, XS> x, layout<T *, YS> y,
-                  size_type B, Butterfly &&butterfly) const noexcept {
+  template <size_type R, typename PX, size_type XS, size_type YS, typename Butterfly>
+  void stage_loop(stage const &st, layout<PX, XS> x, layout<T *, YS> y, size_type B,
+                  Butterfly &&butterfly) const noexcept {
     size_type const m{st.m}, s{st.s};
     for (size_type p{0}; p < m; ++p) {
       cplx<T> const *w{_twiddles.data() + st.twiddle_offset + p * (R - 1)};
@@ -278,49 +257,39 @@ private:
   /// GCC applies restrict only to function parameters, so the row pointers
   /// are unpacked into the butterfly's parameter list.
   template <bool TW, size_type XS, size_type YS, bool Last>
-  static void radix2(size_type B, rows<2> const &o, cplx<T> const *w,
-                     T scale) noexcept {
-    radix2<TW, XS, YS, Last>(B, o.xr[0], o.xi[0], o.xr[1], o.xi[1], o.yr[0],
-                             o.yi[0], o.yr[1], o.yi[1], w, scale);
+  static void radix2(size_type B, rows<2> const &o, cplx<T> const *w, T scale) noexcept {
+    radix2<TW, XS, YS, Last>(B, o.xr[0], o.xi[0], o.xr[1], o.xi[1], o.yr[0], o.yi[0], o.yr[1],
+                             o.yi[1], w, scale);
   }
   template <bool TW, size_type XS, size_type YS, bool Last>
-  static void radix3(size_type B, rows<3> const &o, cplx<T> const *w,
-                     T scale) noexcept {
-    radix3<TW, XS, YS, Last>(B, o.xr[0], o.xi[0], o.xr[1], o.xi[1], o.xr[2],
-                             o.xi[2], o.yr[0], o.yi[0], o.yr[1], o.yi[1],
-                             o.yr[2], o.yi[2], w, scale);
+  static void radix3(size_type B, rows<3> const &o, cplx<T> const *w, T scale) noexcept {
+    radix3<TW, XS, YS, Last>(B, o.xr[0], o.xi[0], o.xr[1], o.xi[1], o.xr[2], o.xi[2], o.yr[0],
+                             o.yi[0], o.yr[1], o.yi[1], o.yr[2], o.yi[2], w, scale);
   }
   template <bool TW, size_type XS, size_type YS, bool Last>
-  static void radix4(size_type B, rows<4> const &o, cplx<T> const *w,
-                     T scale) noexcept {
-    radix4<TW, XS, YS, Last>(B, o.xr[0], o.xi[0], o.xr[1], o.xi[1], o.xr[2],
-                             o.xi[2], o.xr[3], o.xi[3], o.yr[0], o.yi[0],
-                             o.yr[1], o.yi[1], o.yr[2], o.yi[2], o.yr[3],
+  static void radix4(size_type B, rows<4> const &o, cplx<T> const *w, T scale) noexcept {
+    radix4<TW, XS, YS, Last>(B, o.xr[0], o.xi[0], o.xr[1], o.xi[1], o.xr[2], o.xi[2], o.xr[3],
+                             o.xi[3], o.yr[0], o.yi[0], o.yr[1], o.yi[1], o.yr[2], o.yi[2], o.yr[3],
                              o.yi[3], w, scale);
   }
   template <bool TW, size_type XS, size_type YS, bool Last>
-  static void radix5(size_type B, rows<5> const &o, cplx<T> const *w,
-                     T scale) noexcept {
-    radix5<TW, XS, YS, Last>(
-        B, o.xr[0], o.xi[0], o.xr[1], o.xi[1], o.xr[2], o.xi[2], o.xr[3],
-        o.xi[3], o.xr[4], o.xi[4], o.yr[0], o.yi[0], o.yr[1], o.yi[1], o.yr[2],
-        o.yi[2], o.yr[3], o.yi[3], o.yr[4], o.yi[4], w, scale);
+  static void radix5(size_type B, rows<5> const &o, cplx<T> const *w, T scale) noexcept {
+    radix5<TW, XS, YS, Last>(B, o.xr[0], o.xi[0], o.xr[1], o.xi[1], o.xr[2], o.xi[2], o.xr[3],
+                             o.xi[3], o.xr[4], o.xi[4], o.yr[0], o.yi[0], o.yr[1], o.yi[1], o.yr[2],
+                             o.yi[2], o.yr[3], o.yi[3], o.yr[4], o.yi[4], w, scale);
   }
   template <bool TW, size_type XS, size_type YS, bool Last>
-  static void radix8(size_type B, rows<8> const &o, cplx<T> const *w,
-                     T scale) noexcept {
-    radix8<TW, XS, YS, Last>(
-        B, o.xr[0], o.xi[0], o.xr[1], o.xi[1], o.xr[2], o.xi[2], o.xr[3],
-        o.xi[3], o.xr[4], o.xi[4], o.xr[5], o.xi[5], o.xr[6], o.xi[6], o.xr[7],
-        o.xi[7], o.yr[0], o.yi[0], o.yr[1], o.yi[1], o.yr[2], o.yi[2], o.yr[3],
-        o.yi[3], o.yr[4], o.yi[4], o.yr[5], o.yi[5], o.yr[6], o.yi[6], o.yr[7],
-        o.yi[7], w, scale);
+  static void radix8(size_type B, rows<8> const &o, cplx<T> const *w, T scale) noexcept {
+    radix8<TW, XS, YS, Last>(B, o.xr[0], o.xi[0], o.xr[1], o.xi[1], o.xr[2], o.xi[2], o.xr[3],
+                             o.xi[3], o.xr[4], o.xi[4], o.xr[5], o.xi[5], o.xr[6], o.xi[6], o.xr[7],
+                             o.xi[7], o.yr[0], o.yi[0], o.yr[1], o.yi[1], o.yr[2], o.yi[2], o.yr[3],
+                             o.yi[3], o.yr[4], o.yi[4], o.yr[5], o.yi[5], o.yr[6], o.yi[6], o.yr[7],
+                             o.yi[7], w, scale);
   }
 
   /// Twiddle product (vr + i vi) * (wr + i wi) in place; identity when TW is
   /// false.
-  template <bool TW>
-  static constexpr void tw(T &vr, T &vi, T wr, T wi) noexcept {
+  template <bool TW> static constexpr void tw(T &vr, T &vi, T wr, T wi) noexcept {
     if constexpr (TW) {
       T const r{vr * wr - vi * wi};
       vi = vr * wi + vi * wr;
@@ -330,8 +299,7 @@ private:
 
   /// Output store; the scale is applied by the last stage only.
   template <size_type YS, bool Last>
-  static constexpr void put(T *yr, T *yi, size_type b, T vr, T vi,
-                            T scale) noexcept {
+  static constexpr void put(T *yr, T *yi, size_type b, T vr, T vi, T scale) noexcept {
     if constexpr (Last) {
       yr[YS * b] = vr * scale;
       yi[YS * b] = vi * scale;
@@ -342,14 +310,12 @@ private:
   }
 
   template <bool TW, size_type XS, size_type YS, bool Last>
-  static void radix2(size_type B, T const *x0r, T const *x0i, T const *x1r,
-                     T const *x1i, T *__restrict y0r, T *__restrict y0i,
-                     T *__restrict y1r, T *__restrict y1i, cplx<T> const *w,
-                     T scale) noexcept {
+  static void radix2(size_type B, T const *x0r, T const *x0i, T const *x1r, T const *x1i,
+                     T *__restrict y0r, T *__restrict y0i, T *__restrict y1r, T *__restrict y1i,
+                     cplx<T> const *w, T scale) noexcept {
     T const w1r{w[0].real()}, w1i{w[0].imag()};
     for (size_type b{0}; b < B; ++b) {
-      T const a0r{x0r[XS * b]}, a0i{x0i[XS * b]}, a1r{x1r[XS * b]},
-          a1i{x1i[XS * b]};
+      T const a0r{x0r[XS * b]}, a0i{x0i[XS * b]}, a1r{x1r[XS * b]}, a1i{x1i[XS * b]};
       put<YS, Last>(y0r, y0i, b, a0r + a1r, a0i + a1i, scale);
       T v1r{a0r - a1r}, v1i{a0i - a1i};
       tw<TW>(v1r, v1i, w1r, w1i);
@@ -358,18 +324,15 @@ private:
   }
 
   template <bool TW, size_type XS, size_type YS, bool Last>
-  static void radix3(size_type B, T const *x0r, T const *x0i, T const *x1r,
-                     T const *x1i, T const *x2r, T const *x2i,
-                     T *__restrict y0r, T *__restrict y0i, T *__restrict y1r,
-                     T *__restrict y1i, T *__restrict y2r, T *__restrict y2i,
+  static void radix3(size_type B, T const *x0r, T const *x0i, T const *x1r, T const *x1i,
+                     T const *x2r, T const *x2i, T *__restrict y0r, T *__restrict y0i,
+                     T *__restrict y1r, T *__restrict y1i, T *__restrict y2r, T *__restrict y2i,
                      cplx<T> const *w, T scale) noexcept {
     constexpr T half{T(0.5)};
     constexpr T sin60{T(0.866025403784438646763723170752936183L)};
-    T const w1r{w[0].real()}, w1i{w[0].imag()}, w2r{w[1].real()},
-        w2i{w[1].imag()};
+    T const w1r{w[0].real()}, w1i{w[0].imag()}, w2r{w[1].real()}, w2i{w[1].imag()};
     for (size_type b{0}; b < B; ++b) {
-      T const a0r{x0r[XS * b]}, a0i{x0i[XS * b]}, a1r{x1r[XS * b]},
-          a1i{x1i[XS * b]};
+      T const a0r{x0r[XS * b]}, a0i{x0i[XS * b]}, a1r{x1r[XS * b]}, a1i{x1i[XS * b]};
       T const a2r{x2r[XS * b]}, a2i{x2i[XS * b]};
       T const t1r{a1r + a2r}, t1i{a1i + a2i};
       T const m1r{a0r - half * t1r}, m1i{a0i - half * t1i};
@@ -385,22 +348,17 @@ private:
   }
 
   template <bool TW, size_type XS, size_type YS, bool Last>
-  static void radix4(size_type B, T const *x0r, T const *x0i, T const *x1r,
-                     T const *x1i, T const *x2r, T const *x2i, T const *x3r,
-                     T const *x3i, T *__restrict y0r, T *__restrict y0i,
-                     T *__restrict y1r, T *__restrict y1i, T *__restrict y2r,
-                     T *__restrict y2i, T *__restrict y3r, T *__restrict y3i,
-                     cplx<T> const *w, T scale) noexcept {
-    T const w1r{w[0].real()}, w1i{w[0].imag()}, w2r{w[1].real()},
-        w2i{w[1].imag()};
+  static void radix4(size_type B, T const *x0r, T const *x0i, T const *x1r, T const *x1i,
+                     T const *x2r, T const *x2i, T const *x3r, T const *x3i, T *__restrict y0r,
+                     T *__restrict y0i, T *__restrict y1r, T *__restrict y1i, T *__restrict y2r,
+                     T *__restrict y2i, T *__restrict y3r, T *__restrict y3i, cplx<T> const *w,
+                     T scale) noexcept {
+    T const w1r{w[0].real()}, w1i{w[0].imag()}, w2r{w[1].real()}, w2i{w[1].imag()};
     T const w3r{w[2].real()}, w3i{w[2].imag()};
     for (size_type b{0}; b < B; ++b) {
-      T const a0r{x0r[XS * b]}, a0i{x0i[XS * b]}, a1r{x1r[XS * b]},
-          a1i{x1i[XS * b]};
-      T const a2r{x2r[XS * b]}, a2i{x2i[XS * b]}, a3r{x3r[XS * b]},
-          a3i{x3i[XS * b]};
-      T const s02r{a0r + a2r}, s02i{a0i + a2i}, d02r{a0r - a2r},
-          d02i{a0i - a2i};
+      T const a0r{x0r[XS * b]}, a0i{x0i[XS * b]}, a1r{x1r[XS * b]}, a1i{x1i[XS * b]};
+      T const a2r{x2r[XS * b]}, a2i{x2i[XS * b]}, a3r{x3r[XS * b]}, a3i{x3i[XS * b]};
+      T const s02r{a0r + a2r}, s02i{a0i + a2i}, d02r{a0r - a2r}, d02i{a0i - a2i};
       T const s13r{a1r + a3r}, s13i{a1i + a3i};
       // d13 = -i (a1 - a3)
       T const d13r{a1i - a3i}, d13i{a3r - a1r};
@@ -417,26 +375,21 @@ private:
   }
 
   template <bool TW, size_type XS, size_type YS, bool Last>
-  static void radix5(size_type B, T const *x0r, T const *x0i, T const *x1r,
-                     T const *x1i, T const *x2r, T const *x2i, T const *x3r,
-                     T const *x3i, T const *x4r, T const *x4i,
-                     T *__restrict y0r, T *__restrict y0i, T *__restrict y1r,
-                     T *__restrict y1i, T *__restrict y2r, T *__restrict y2i,
-                     T *__restrict y3r, T *__restrict y3i, T *__restrict y4r,
-                     T *__restrict y4i, cplx<T> const *w, T scale) noexcept {
+  static void radix5(size_type B, T const *x0r, T const *x0i, T const *x1r, T const *x1i,
+                     T const *x2r, T const *x2i, T const *x3r, T const *x3i, T const *x4r,
+                     T const *x4i, T *__restrict y0r, T *__restrict y0i, T *__restrict y1r,
+                     T *__restrict y1i, T *__restrict y2r, T *__restrict y2i, T *__restrict y3r,
+                     T *__restrict y3i, T *__restrict y4r, T *__restrict y4i, cplx<T> const *w,
+                     T scale) noexcept {
     constexpr T c1{T(0.309016994374947424102293417182819059L)};  // cos(2pi/5)
     constexpr T c2{T(-0.809016994374947424102293417182819059L)}; // cos(4pi/5)
     constexpr T s1{T(0.951056516295153572116439333379382143L)};  // sin(2pi/5)
     constexpr T s2{T(0.587785252292473129168705954639072769L)};  // sin(4pi/5)
-    T const w1r{w[0].real()}, w1i{w[0].imag()}, w2r{w[1].real()},
-        w2i{w[1].imag()};
-    T const w3r{w[2].real()}, w3i{w[2].imag()}, w4r{w[3].real()},
-        w4i{w[3].imag()};
+    T const w1r{w[0].real()}, w1i{w[0].imag()}, w2r{w[1].real()}, w2i{w[1].imag()};
+    T const w3r{w[2].real()}, w3i{w[2].imag()}, w4r{w[3].real()}, w4i{w[3].imag()};
     for (size_type b{0}; b < B; ++b) {
-      T const a0r{x0r[XS * b]}, a0i{x0i[XS * b]}, a1r{x1r[XS * b]},
-          a1i{x1i[XS * b]};
-      T const a2r{x2r[XS * b]}, a2i{x2i[XS * b]}, a3r{x3r[XS * b]},
-          a3i{x3i[XS * b]};
+      T const a0r{x0r[XS * b]}, a0i{x0i[XS * b]}, a1r{x1r[XS * b]}, a1i{x1i[XS * b]};
+      T const a2r{x2r[XS * b]}, a2i{x2i[XS * b]}, a3r{x3r[XS * b]}, a3i{x3i[XS * b]};
       T const a4r{x4r[XS * b]}, a4i{x4i[XS * b]};
       T const t1r{a1r + a4r}, t1i{a1i + a4i}, t2r{a2r + a3r}, t2i{a2i + a3i};
       T const t3r{a1r - a4r}, t3i{a1i - a4i}, t4r{a2r - a3r}, t4i{a2i - a3i};
@@ -462,24 +415,18 @@ private:
   /// Radix-8 as two radix-4 DFTs (even / odd inputs) joined by radix-2
   /// butterflies, with the internal twiddles w_8^k folded into constants.
   template <bool TW, size_type XS, size_type YS, bool Last>
-  static void radix8(size_type B, T const *x0r, T const *x0i, T const *x1r,
-                     T const *x1i, T const *x2r, T const *x2i, T const *x3r,
-                     T const *x3i, T const *x4r, T const *x4i, T const *x5r,
-                     T const *x5i, T const *x6r, T const *x6i, T const *x7r,
-                     T const *x7i, T *__restrict y0r, T *__restrict y0i,
-                     T *__restrict y1r, T *__restrict y1i, T *__restrict y2r,
-                     T *__restrict y2i, T *__restrict y3r, T *__restrict y3i,
-                     T *__restrict y4r, T *__restrict y4i, T *__restrict y5r,
-                     T *__restrict y5i, T *__restrict y6r, T *__restrict y6i,
-                     T *__restrict y7r, T *__restrict y7i, cplx<T> const *w,
-                     T scale) noexcept {
+  static void radix8(size_type B, T const *x0r, T const *x0i, T const *x1r, T const *x1i,
+                     T const *x2r, T const *x2i, T const *x3r, T const *x3i, T const *x4r,
+                     T const *x4i, T const *x5r, T const *x5i, T const *x6r, T const *x6i,
+                     T const *x7r, T const *x7i, T *__restrict y0r, T *__restrict y0i,
+                     T *__restrict y1r, T *__restrict y1i, T *__restrict y2r, T *__restrict y2i,
+                     T *__restrict y3r, T *__restrict y3i, T *__restrict y4r, T *__restrict y4i,
+                     T *__restrict y5r, T *__restrict y5i, T *__restrict y6r, T *__restrict y6i,
+                     T *__restrict y7r, T *__restrict y7i, cplx<T> const *w, T scale) noexcept {
     constexpr T h{T(0.707106781186547524400844362104849039L)}; // 1/sqrt(2)
-    T const w1r{w[0].real()}, w1i{w[0].imag()}, w2r{w[1].real()},
-        w2i{w[1].imag()};
-    T const w3r{w[2].real()}, w3i{w[2].imag()}, w4r{w[3].real()},
-        w4i{w[3].imag()};
-    T const w5r{w[4].real()}, w5i{w[4].imag()}, w6r{w[5].real()},
-        w6i{w[5].imag()};
+    T const w1r{w[0].real()}, w1i{w[0].imag()}, w2r{w[1].real()}, w2i{w[1].imag()};
+    T const w3r{w[2].real()}, w3i{w[2].imag()}, w4r{w[3].real()}, w4i{w[3].imag()};
+    T const w5r{w[4].real()}, w5i{w[4].imag()}, w6r{w[5].real()}, w6i{w[5].imag()};
     T const w7r{w[6].real()}, w7i{w[6].imag()};
     for (size_type b{0}; b < B; ++b) {
       size_type const k{XS * b};
@@ -528,8 +475,8 @@ private:
   /// Direct O(R^2) DFT butterfly for odd primes 7 .. max_direct_radix,
   /// with the batch as the innermost loop.
   template <bool Last, typename PX, size_type XS, size_type YS>
-  void generic_stage(stage const &st, layout<PX, XS> x, layout<T *, YS> y,
-                     size_type B, T scale) const noexcept {
+  void generic_stage(stage const &st, layout<PX, XS> x, layout<T *, YS> y, size_type B,
+                     T scale) const noexcept {
     size_type const R{st.radix}, m{st.m}, s{st.s};
     cplx<T> const *roots{_roots.data() + st.roots_offset};
     for (size_type p{0}; p < m; ++p) {

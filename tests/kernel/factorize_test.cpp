@@ -9,8 +9,7 @@ using namespace numsim::fft::kernel;
 
 namespace {
 std::size_t product(std::vector<std::size_t> const &f) {
-  return std::accumulate(f.begin(), f.end(), std::size_t{1},
-                         std::multiplies<>{});
+  return std::accumulate(f.begin(), f.end(), std::size_t{1}, std::multiplies<>{});
 }
 } // namespace
 
