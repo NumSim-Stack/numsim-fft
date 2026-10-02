@@ -15,8 +15,8 @@ namespace numsim::fft {
  * @brief Reusable temporaries for plan execution.
  *
  * Plans are immutable and shared; everything they need per call (kernel
- * scratch per work chunk, the input copy of an r2c backward transform, the
- * temporaries and MPI buffers of distributed plans) is borrowed from a
+ * scratch per work chunk, the intermediate field of an r2c backward transform,
+ * the temporaries and MPI buffers of distributed plans) is borrowed from a
  * workspace. Buffers only grow, so after the first call with a given plan
  * no further allocation happens. Without an explicit workspace a plan uses
  * a temporary one.
@@ -38,6 +38,11 @@ public:
     return grow<S>(_buffers[slot], count);
   }
 
+  /// Scalars held by buffer `slot` (0 when it was never requested).
+  size_type buffer_size(size_type slot) const noexcept {
+    return slot < _buffers.size() ? _buffers[slot].size() : 0;
+  }
+
   /// Makes room for `chunks` concurrent chunk buffers (call before bulk()).
   void prepare_chunks(size_type chunks) {
     if (_chunks.size() < chunks)
@@ -57,7 +62,7 @@ public:
   Obj &object(size_type slot, Make &&make, Valid &&valid) {
     if (_objects.size() <= slot)
       _objects.resize(slot + 1);
-    if (Obj *o{std::any_cast<Obj>(&_objects[slot])}; o && valid(*o))
+    if (Obj * o{std::any_cast<Obj>(&_objects[slot])}; o && valid(*o))
       return *o;
     _objects[slot] = make();
     return *std::any_cast<Obj>(&_objects[slot]);
@@ -85,11 +90,13 @@ private:
 
 /// Slots used by the library's plans (users may use any slot >= user_base).
 namespace workspace_slot {
-inline constexpr std::size_t backward_copy{0};  ///< plan: r2c backward input copy
-inline constexpr std::size_t transpose_a{1};    ///< distributed: pre/post-transpose field
-inline constexpr std::size_t transpose_b{2};    ///< distributed: transposed field
-inline constexpr std::size_t send{3};           ///< distributed: packed send buffer
-inline constexpr std::size_t receive{4};        ///< distributed: packed receive buffer
+inline constexpr std::size_t backward_copy{
+    0}; ///< plan: r2c backward intermediate
+inline constexpr std::size_t transpose_a{
+    1}; ///< distributed: pre/post-transpose field
+inline constexpr std::size_t transpose_b{2}; ///< distributed: transposed field
+inline constexpr std::size_t send{3};    ///< distributed: packed send buffer
+inline constexpr std::size_t receive{4}; ///< distributed: packed receive buffer
 inline constexpr std::size_t transpose_cache{5}; ///< distributed: MPI layouts
 inline constexpr std::size_t user_base{16};
 } // namespace workspace_slot

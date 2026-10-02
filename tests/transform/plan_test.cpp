@@ -55,8 +55,10 @@ TYPED_TEST(nd_plan, c2c_matches_reference_1d_2d_3d) {
     auto const in{random_field<C>(e)};
     field<C, 1> out{e};
     ASSERT_TRUE(p.forward(in, out).has_value());
-    auto const expected{ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, all_periodic<1>())};
-    EXPECT_LT(test::relative_error(out.scalars(), expected), test::tolerance<T>(30));
+    auto const expected{ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1,
+                                        all_periodic<1>())};
+    EXPECT_LT(test::relative_error(out.scalars(), expected),
+              test::tolerance<T>(30));
   }
   {
     extents<2> const e{6, 10};
@@ -64,8 +66,10 @@ TYPED_TEST(nd_plan, c2c_matches_reference_1d_2d_3d) {
     auto const in{random_field<C>(e)};
     field<C, 2> out{e};
     ASSERT_TRUE(p.forward(in, out).has_value());
-    auto const expected{ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, all_periodic<2>())};
-    EXPECT_LT(test::relative_error(out.scalars(), expected), test::tolerance<T>(60));
+    auto const expected{ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1,
+                                        all_periodic<2>())};
+    EXPECT_LT(test::relative_error(out.scalars(), expected),
+              test::tolerance<T>(60));
   }
   {
     extents<3> const e{4, 5, 6};
@@ -73,8 +77,10 @@ TYPED_TEST(nd_plan, c2c_matches_reference_1d_2d_3d) {
     auto const in{random_field<C>(e)};
     field<C, 3> out{e};
     ASSERT_TRUE(p.forward(in, out).has_value());
-    auto const expected{ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, all_periodic<3>())};
-    EXPECT_LT(test::relative_error(out.scalars(), expected), test::tolerance<T>(120));
+    auto const expected{ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1,
+                                        all_periodic<3>())};
+    EXPECT_LT(test::relative_error(out.scalars(), expected),
+              test::tolerance<T>(120));
   }
 }
 
@@ -87,15 +93,18 @@ TYPED_TEST(nd_plan, c2c_with_mixed_axis_kinds) {
   auto const in{random_field<C>(e)};
   field<C, 3> out{e};
   ASSERT_TRUE(p.forward(in, out).has_value());
-  auto const expected{ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, kinds)};
-  EXPECT_LT(test::relative_error(out.scalars(), expected), test::tolerance<T>(210, 16));
+  auto const expected{
+      ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, kinds)};
+  EXPECT_LT(test::relative_error(out.scalars(), expected),
+            test::tolerance<T>(210, 16));
 }
 
 TYPED_TEST(nd_plan, r2c_halves_last_periodic_axis_and_matches_reference) {
   using T = TypeParam;
-  for (auto const &kinds : {std::array<ak, 3>{ak::periodic, ak::periodic, ak::periodic},
-                            std::array<ak, 3>{ak::periodic, ak::periodic, ak::dct1},
-                            std::array<ak, 3>{ak::dst2, ak::periodic, ak::dct4}}) {
+  for (auto const &kinds :
+       {std::array<ak, 3>{ak::periodic, ak::periodic, ak::periodic},
+        std::array<ak, 3>{ak::periodic, ak::periodic, ak::dct1},
+        std::array<ak, 3>{ak::dst2, ak::periodic, ak::dct4}}) {
     extents<3> const e{4, 7, 6};
     auto const p{make_r2c_plan<T>(e, kinds).value()};
     std::size_t axis{2};
@@ -106,9 +115,12 @@ TYPED_TEST(nd_plan, r2c_halves_last_periodic_axis_and_matches_reference) {
     auto const in{random_field<T>(e)};
     field<std::complex<T>, 3> out{p.spectral_extents()};
     ASSERT_TRUE(p.forward(in, out).has_value());
-    auto const full{ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, kinds)};
-    auto const expected{ref::crop(full, e.as_array(), 1, axis, e[axis] / 2 + 1)};
-    EXPECT_LT(test::relative_error(out.scalars(), expected), test::tolerance<T>(168, 16));
+    auto const full{
+        ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, kinds)};
+    auto const expected{
+        ref::crop(full, e.as_array(), 1, axis, e[axis] / 2 + 1)};
+    EXPECT_LT(test::relative_error(out.scalars(), expected),
+              test::tolerance<T>(168, 16));
   }
 }
 
@@ -120,11 +132,13 @@ TYPED_TEST(nd_plan, r2r_all_axes_matches_reference) {
   auto const in{random_field<T>(e)};
   field<T, 3> out{e};
   ASSERT_TRUE(p.forward(in, out).has_value());
-  auto const expected{ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, kinds)};
+  auto const expected{
+      ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, kinds)};
   std::vector<ref::real> expected_re(expected.size());
   for (std::size_t i{0}; i < expected.size(); ++i)
     expected_re[i] = expected[i].real();
-  EXPECT_LT(test::relative_error(out.scalars(), expected_re), test::tolerance<T>(60, 16));
+  EXPECT_LT(test::relative_error(out.scalars(), expected_re),
+            test::tolerance<T>(60, 16));
 }
 
 TYPED_TEST(nd_plan, roundtrips_with_default_normalization) {
@@ -138,7 +152,8 @@ TYPED_TEST(nd_plan, roundtrips_with_default_normalization) {
     field<C, 3> spec{e}, back{e};
     ASSERT_TRUE(p.forward(in, spec).has_value());
     ASSERT_TRUE(p.backward(spec, back).has_value());
-    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()), test::tolerance<T>(180, 16));
+    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()),
+              test::tolerance<T>(180, 16));
   }
   {
     auto const p{make_r2c_plan<T>(e, mixed).value()};
@@ -148,7 +163,8 @@ TYPED_TEST(nd_plan, roundtrips_with_default_normalization) {
     ASSERT_TRUE(p.forward(in, spec).has_value());
     auto const spec_copy{spec};
     ASSERT_TRUE(p.backward(spec, back).has_value());
-    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()), test::tolerance<T>(180, 16));
+    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()),
+              test::tolerance<T>(180, 16));
     // backward leaves its input untouched
     EXPECT_EQ(test::relative_error(spec.scalars(), spec_copy.scalars()), 0.0L);
   }
@@ -159,8 +175,42 @@ TYPED_TEST(nd_plan, roundtrips_with_default_normalization) {
     field<T, 3> spec{e}, back{e};
     ASSERT_TRUE(p.forward(in, spec).has_value());
     ASSERT_TRUE(p.backward(spec, back).has_value());
-    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()), test::tolerance<T>(180, 16));
+    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()),
+              test::tolerance<T>(180, 16));
   }
+}
+
+TYPED_TEST(
+    nd_plan,
+    destructive_backward_gives_the_same_result_and_may_overwrite_its_input) {
+  using T = TypeParam;
+  using C = std::complex<T>;
+  extents<3> const e{5, 4, 9};
+  std::array<ak, 3> const mixed{ak::dst4, ak::periodic, ak::periodic};
+  auto const p{make_r2c_plan<T>(e, mixed).value()};
+  auto const in{random_field<T>(e)};
+  field<C, 3> spec{p.spectral_extents()};
+  field<T, 3> back{e}, back_destructive{e};
+  ASSERT_TRUE(p.forward(in, spec).has_value());
+  ASSERT_TRUE(p.backward(spec, back).has_value());
+  workspace<T> ws;
+  ASSERT_TRUE(
+      p.backward_destructive(spec, back_destructive, sequential_executor{}, ws)
+          .has_value());
+  EXPECT_EQ(test::relative_error(back_destructive.scalars(), back.scalars()),
+            0.0L);
+  // no field-sized temporary is needed when the input may be overwritten
+  EXPECT_EQ(ws.buffer_size(workspace_slot::backward_copy), 0u);
+
+  // c2c and r2r plans: identical to backward (nothing to destroy)
+  auto const pc{make_c2c_plan<T>(e, mixed).value()};
+  auto const cin{random_field<C>(e)};
+  field<C, 3> cspec{e}, cback{e}, cback_destructive{e};
+  ASSERT_TRUE(pc.forward(cin, cspec).has_value());
+  ASSERT_TRUE(pc.backward(cspec, cback).has_value());
+  ASSERT_TRUE(pc.backward_destructive(cspec, cback_destructive).has_value());
+  EXPECT_EQ(test::relative_error(cback_destructive.scalars(), cback.scalars()),
+            0.0L);
 }
 
 TYPED_TEST(nd_plan, r2c_roundtrip_1d_needs_no_temporary_and_2d_odd_sizes) {
@@ -173,7 +223,8 @@ TYPED_TEST(nd_plan, r2c_roundtrip_1d_needs_no_temporary_and_2d_odd_sizes) {
     field<T, 1> back{e};
     ASSERT_TRUE(p.forward(in, spec).has_value());
     ASSERT_TRUE(p.backward(spec, back).has_value());
-    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()), test::tolerance<T>(n));
+    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()),
+              test::tolerance<T>(n));
   }
   extents<2> const e{7, 5};
   auto const p{make_r2c_plan<T>(e).value()};
@@ -182,7 +233,8 @@ TYPED_TEST(nd_plan, r2c_roundtrip_1d_needs_no_temporary_and_2d_odd_sizes) {
   field<T, 2> back{e};
   ASSERT_TRUE(p.forward(in, spec).has_value());
   ASSERT_TRUE(p.backward(spec, back).has_value());
-  EXPECT_LT(test::relative_error(back.scalars(), in.scalars()), test::tolerance<T>(35));
+  EXPECT_LT(test::relative_error(back.scalars(), in.scalars()),
+            test::tolerance<T>(35));
 }
 
 TEST(nd_plan_options, normalization_modes) {
@@ -194,7 +246,8 @@ TEST(nd_plan_options, normalization_modes) {
     energy_in += test::abs2(v);
 
   // ortho: unitary, energy preserving, roundtrip identity
-  auto const ortho{make_c2c_plan<double>(e, {}, {.norm = normalization::ortho}).value()};
+  auto const ortho{
+      make_c2c_plan<double>(e, {}, {.norm = normalization::ortho}).value()};
   field<C, 2> spec{e}, back{e};
   ASSERT_TRUE(ortho.forward(in, spec).has_value());
   long double energy_spec{0};
@@ -205,7 +258,8 @@ TEST(nd_plan_options, normalization_modes) {
   EXPECT_LT(test::relative_error(back.scalars(), in.scalars()), 1e-14L);
 
   // none: roundtrip gives N * x
-  auto const none{make_c2c_plan<double>(e, {}, {.norm = normalization::none}).value()};
+  auto const none{
+      make_c2c_plan<double>(e, {}, {.norm = normalization::none}).value()};
   ASSERT_TRUE(none.forward(in, spec).has_value());
   ASSERT_TRUE(none.backward(spec, back).has_value());
   std::vector<C> scaled(in.scalars().begin(), in.scalars().end());
@@ -220,11 +274,17 @@ TEST(nd_plan_options, batch_blocking_does_not_change_the_result) {
   std::array<ak, 3> const kinds{ak::periodic, ak::dct3, ak::periodic};
   auto const in{random_field<C>(e)};
   field<C, 3> reference{e}, blocked{e};
-  ASSERT_TRUE(make_c2c_plan<double>(e, kinds).value().forward(in, reference).has_value());
+  ASSERT_TRUE(make_c2c_plan<double>(e, kinds)
+                  .value()
+                  .forward(in, reference)
+                  .has_value());
   for (std::size_t max_batch : {1u, 3u, 7u}) {
-    auto const p{make_c2c_plan<double>(e, kinds, {.max_batch = max_batch}).value()};
+    auto const p{
+        make_c2c_plan<double>(e, kinds, {.max_batch = max_batch}).value()};
     ASSERT_TRUE(p.forward(in, blocked).has_value());
-    EXPECT_LT(test::relative_error(blocked.scalars(), reference.scalars()), 1e-15L) << max_batch;
+    EXPECT_LT(test::relative_error(blocked.scalars(), reference.scalars()),
+              1e-15L)
+        << max_batch;
   }
 }
 
@@ -244,8 +304,9 @@ TEST(nd_plan_errors, invalid_plans) {
   EXPECT_EQ(make_c2c_plan<double>(extents{4, 0}).error(), error::zero_extent);
   EXPECT_EQ(make_r2r_plan<double>(extents{4, 1}, {ak::dct2, ak::dct1}).error(),
             error::size_below_minimum);
-  EXPECT_EQ(make_r2r_plan<double>(extents{4, 4}, {ak::dct2, ak::periodic}).error(),
-            error::periodic_axis_in_r2r);
+  EXPECT_EQ(
+      make_r2r_plan<double>(extents{4, 4}, {ak::dct2, ak::periodic}).error(),
+      error::periodic_axis_in_r2r);
   EXPECT_EQ(make_r2c_plan<double>(extents{4, 4}, {ak::dct2, ak::dst2}).error(),
             error::no_periodic_axis);
 }
@@ -277,10 +338,13 @@ TYPED_TEST(nd_plan, identity_axes_are_not_transformed) {
     auto const in{random_field<C>(e)};
     field<C, 3> out{e}, back{e};
     ASSERT_TRUE(p.forward(in, out).has_value());
-    auto const expected{ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, kinds)};
-    EXPECT_LT(test::relative_error(out.scalars(), expected), test::tolerance<T>(30, 16));
+    auto const expected{
+        ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, kinds)};
+    EXPECT_LT(test::relative_error(out.scalars(), expected),
+              test::tolerance<T>(30, 16));
     ASSERT_TRUE(p.backward(out, back).has_value());
-    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()), test::tolerance<T>(30, 16));
+    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()),
+              test::tolerance<T>(30, 16));
   }
   {
     // r2c along axis 0: the later axes are identity
@@ -291,11 +355,14 @@ TYPED_TEST(nd_plan, identity_axes_are_not_transformed) {
     field<C, 3> out{p.spectral_extents()};
     field<T, 3> back{e};
     ASSERT_TRUE(p.forward(in, out).has_value());
-    auto const full{ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, kinds)};
-    EXPECT_LT(test::relative_error(out.scalars(), ref::crop(full, e.as_array(), 1, 0, 3)),
+    auto const full{
+        ref::forward_nd(to_ref(in.scalars()), e.as_array(), 1, kinds)};
+    EXPECT_LT(test::relative_error(out.scalars(),
+                                   ref::crop(full, e.as_array(), 1, 0, 3)),
               test::tolerance<T>(4, 16));
     ASSERT_TRUE(p.backward(out, back).has_value());
-    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()), test::tolerance<T>(4, 16));
+    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()),
+              test::tolerance<T>(4, 16));
   }
   {
     std::array<ak, 3> const kinds{ak::dst1, ak::identity, ak::dct3};
@@ -304,7 +371,8 @@ TYPED_TEST(nd_plan, identity_axes_are_not_transformed) {
     field<T, 3> out{e}, back{e};
     ASSERT_TRUE(p.forward(in, out).has_value());
     ASSERT_TRUE(p.backward(out, back).has_value());
-    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()), test::tolerance<T>(30, 16));
+    EXPECT_LT(test::relative_error(back.scalars(), in.scalars()),
+              test::tolerance<T>(30, 16));
   }
 }
 
@@ -316,22 +384,25 @@ TEST(nd_plan_identity, all_identity_plan_copies_and_scales) {
   auto const p{make_c2c_plan<double>(e, {ak::identity, ak::identity}).value()};
   ASSERT_TRUE(p.forward(in, out).has_value());
   EXPECT_TRUE(std::ranges::equal(in.scalars(), out.scalars()));
-  auto const ortho{
-      make_c2c_plan<double>(e, {ak::identity, ak::identity}, {.norm = normalization::ortho})
-          .value()};
-  ASSERT_TRUE(ortho.backward(in, out).has_value()); // logical size 1: still a copy
+  auto const ortho{make_c2c_plan<double>(e, {ak::identity, ak::identity},
+                                         {.norm = normalization::ortho})
+                       .value()};
+  ASSERT_TRUE(
+      ortho.backward(in, out).has_value()); // logical size 1: still a copy
   EXPECT_TRUE(std::ranges::equal(in.scalars(), out.scalars()));
 }
 
 TEST(nd_plan_identity, zero_extent_is_allowed_on_identity_axes_only) {
   using C = std::complex<double>;
   extents<3> const e{0, 4, 4};
-  auto const p{make_r2c_plan<double>(e, {ak::identity, ak::periodic, ak::periodic})};
+  auto const p{
+      make_r2c_plan<double>(e, {ak::identity, ak::periodic, ak::periodic})};
   ASSERT_TRUE(p.has_value());
   field<double, 3> const in{e};
   field<C, 3> out{p->spectral_extents()};
   EXPECT_TRUE(p->forward(in, out).has_value());
-  EXPECT_EQ(make_c2c_plan<double>(e, {ak::periodic, ak::periodic, ak::periodic}).error(),
+  EXPECT_EQ(make_c2c_plan<double>(e, {ak::periodic, ak::periodic, ak::periodic})
+                .error(),
             error::zero_extent);
 }
 

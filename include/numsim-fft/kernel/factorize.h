@@ -13,12 +13,16 @@ inline constexpr std::size_t max_direct_radix{31};
 /**
  * @brief Radix sequence for the mixed-radix Stockham kernel.
  *
- * Factors of 4 first (cheapest butterfly per point), then a remaining 2,
- * then the odd primes in ascending order. factorize(1) is empty.
+ * Factors of 8 first (fewest flops and passes per point), then a remaining
+ * 4 or 2, then the odd primes in ascending order. factorize(1) is empty.
  */
 inline std::vector<std::size_t> factorize(std::size_t n) {
   std::vector<std::size_t> radices;
-  while (n % 4 == 0) {
+  while (n % 8 == 0) {
+    radices.push_back(8);
+    n /= 8;
+  }
+  if (n % 4 == 0) {
     radices.push_back(4);
     n /= 4;
   }

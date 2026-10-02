@@ -6,7 +6,7 @@ grids. It targets spectral solvers in mechanics, such as FFT-based
 homogenisation.
 
 - **Own FFT kernels:**
-  - mixed-radix Stockham autosort (specialised radix 2/3/4/5, generic odd radices ≤ 31);
+  - mixed-radix Stockham autosort (specialised radix 2/3/4/5/8, generic odd radices ≤ 31);
   - Bluestein for larger prime factors, so every length N ≥ 1 works;
   - `float`, `double` and `long double`.
 - **Transforms per axis:**
@@ -98,6 +98,8 @@ workspace<double> ws;
 for (int it = 0; it < 1000; ++it) {
   if (!plan.forward(eps, eps_hat, openmp_executor{}, ws)) throw std::runtime_error("fft");
   if (!plan.backward(eps_hat, eps, openmp_executor{}, ws)) throw std::runtime_error("ifft");
+  // backward_destructive(eps_hat, eps, exec, ws) may overwrite eps_hat and
+  // skips the field-sized temporary of a multi-axis r2c backward transform
 }
 
 // mixed axis kinds: DCT-II along x, periodic along y, DST-I along z
@@ -150,11 +152,18 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 
 - **Kernels** (`kernel/`) transform *vector batches*: B adjacent lines at
   once, element j of line b at `ptr[j*stride + b]`. For a tensor field, the
-  batch covers the components and every faster grid axis. Inside the kernel
-  the data are split-complex (separate real and imaginary arrays), so the
-  innermost butterfly loop is plain arithmetic on independent arrays and
-  vectorises. `benchmark/` (Google Benchmark, `NUMSIM_FFT_BUILD_BENCHMARK=ON`)
-  measures kernel GFlop/s and whole-field throughput.
+  batch covers the components and every faster grid axis. Between stages
+  the data are split-complex (separate real and imaginary arrays); the
+  first stage reads the field rows and the last stage writes them directly,
+  so the innermost butterfly loop is plain arithmetic on independent arrays
+  (vectorised by GCC and Clang) and no layout-conversion pass is needed.
+  The r2c kernel reads the even/odd real rows as one complex row, so the
+  packing is free as well. `benchmark/` (Google Benchmark,
+  `NUMSIM_FFT_BUILD_BENCHMARK=ON`) measures kernel GFlop/s and whole-field
+  throughput; on one Zen 3+ core the 1D kernel reaches about 19 GFlop/s
+  (n = 128, 9 lines), a 64³ rank-2 r2c forward + backward takes 30 ms
+  sequentially and 9 ms on 8 cores. Use one thread per physical core:
+  the passes are memory-bound and SMT siblings slow them down.
 - **Plans** (`transform/plan.h`) run one pass per axis.
   - Each pass is split into (slab, block) work items for the executor, and
     every chunk owns its scratch.
@@ -196,6 +205,6 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 
 - Pencil decomposition (2D process grids via MPL cartesian communicators),
   distributed 1D transforms, and HPX distributed (parcelport) backend.
-- Radix-8/16 butterflies and explicit SIMD; a destructive c2r variant that
-  avoids the input copy.
+- Radix-16 butterflies and explicit SIMD; fused axis passes for better
+  multi-thread scaling.
 - Lippmann–Schwinger / Moulinec–Suquet solver on top of the field and plan API.
