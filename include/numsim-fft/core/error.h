@@ -13,7 +13,8 @@ enum class error {
   no_periodic_axis,     ///< real-to-complex transform without a periodic axis
   extents_mismatch,     ///< field extents differ from the plan's
   domain_mismatch,      ///< field scalar types do not fit the plan's domain
-  message_too_large     ///< distributed: a message exceeds MPI's int count
+  message_too_large,    ///< distributed: a message exceeds MPI's int count
+  hooks_unsupported     ///< point hooks on a pass whose points are not contiguous
 };
 
 constexpr std::string_view to_string(error e) noexcept {
@@ -32,6 +33,8 @@ constexpr std::string_view to_string(error e) noexcept {
     return "field scalar types do not match the plan's transform domain";
   case error::message_too_large:
     return "a transpose message exceeds the int count limit of MPI";
+  case error::hooks_unsupported:
+    return "point hooks are not supported on r2r axes of a complex transform";
   }
   return "unknown error";
 }

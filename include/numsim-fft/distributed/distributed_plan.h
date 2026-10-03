@@ -55,10 +55,9 @@ public:
   using kinds_type = std::array<axis_kind, Dim>;
   using extents_type = extents<Dim>;
 
-  [[nodiscard]] static expected<distributed_plan, error> create(mpl::communicator const &comm,
-                                                  extents_type const &global,
-                                                  transform_domain domain, kinds_type const &kinds,
-                                                  plan_options const &options = {}) {
+  [[nodiscard]] static expected<distributed_plan, error>
+  create(mpl::communicator const &comm, extents_type const &global, transform_domain domain,
+         kinds_type const &kinds, plan_options const &options = {}) {
     // Validates the arguments exactly as a serial plan would.
     auto serial{plan<T, Dim>::create(global, domain, kinds, options)};
     if (!serial)
@@ -101,24 +100,44 @@ public:
   [[nodiscard]] expected<void, error> forward(field<EIn, Dim, AIn> const &in,
                                               field<EOut, Dim, AOut> &out, Exec const &exec,
                                               workspace<T> &ws) const {
+    return forward_impl(in, out, exec, ws, static_cast<no_hook const *>(nullptr));
+  }
+  /// With a load hook on the first (local) pass; points are local indices.
+  template <typename EIn, typename AIn, typename EOut, typename AOut, executor Exec, typename F>
+  [[nodiscard]] expected<void, error> forward(field<EIn, Dim, AIn> const &in,
+                                              field<EOut, Dim, AOut> &out, Exec const &exec,
+                                              workspace<T> &ws, load_hook<F> const &hook) const {
+    return forward_impl(in, out, exec, ws, &hook.f);
+  }
+
+private:
+  template <typename EIn, typename AIn, typename EOut, typename AOut, typename Exec, typename Load>
+  expected<void, error> forward_impl(field<EIn, Dim, AIn> const &in, field<EOut, Dim, AOut> &out,
+                                     Exec const &exec, workspace<T> &ws, Load const *load) const {
     if (!all_ranks_match(in.extents() == _local_physical && out.extents() == _local_spectral))
       return unexpected(error::extents_mismatch);
     constexpr size_type C{field<EIn, Dim, AIn>::components};
     T const s{_scale_forward};
     if (_half_spectrum_on_axis0) {
       // real local phase, real transpose, then r2c along axis 0
-      auto &a{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
-      auto &b{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_b, _axis0.physical_extents())};
-      return _local.template run<true>(in, a, exec, T(1), ws)
+      auto &a{
+          temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
+      auto &b{
+          temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_b, _axis0.physical_extents())};
+      return _local
+          .template run<true>(in, a, exec, T(1), ws, nullptr, load, static_cast<no_hook *>(nullptr))
           .and_then([&] { return transpose<true, C>(a, b, ws); })
           .and_then([&] { return _axis0.template run<true>(b, out, exec, s, ws); });
     }
-    auto &a{temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
-    return _local.template run<true>(in, a, exec, T(1), ws)
+    auto &a{
+        temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
+    return _local
+        .template run<true>(in, a, exec, T(1), ws, nullptr, load, static_cast<no_hook *>(nullptr))
         .and_then([&] { return transpose<true, C>(a, out, ws); })
         .and_then([&] { return _axis0.template run<true>(out, out, exec, s, ws); });
   }
 
+public:
   template <typename EIn, typename AIn, typename EOut, typename AOut,
             executor Exec = sequential_executor>
   [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in,
@@ -128,40 +147,62 @@ public:
     return backward(in, out, exec, ws);
   }
   template <typename EIn, typename AIn, typename EOut, typename AOut>
-  [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in,
-                                               field<EOut, Dim, AOut> &out, workspace<T> &ws) const {
+  [[nodiscard]] expected<void, error>
+  backward(field<EIn, Dim, AIn> const &in, field<EOut, Dim, AOut> &out, workspace<T> &ws) const {
     return backward(in, out, sequential_executor{}, ws);
   }
   template <typename EIn, typename AIn, typename EOut, typename AOut, executor Exec>
   [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in,
                                                field<EOut, Dim, AOut> &out, Exec const &exec,
                                                workspace<T> &ws) const {
+    return backward_impl(in, out, exec, ws, static_cast<no_hook *>(nullptr));
+  }
+  /// With a store hook on the last (local) pass; points are local indices.
+  template <typename EIn, typename AIn, typename EOut, typename AOut, executor Exec, typename S>
+  [[nodiscard]] expected<void, error> backward(field<EIn, Dim, AIn> const &in,
+                                               field<EOut, Dim, AOut> &out, Exec const &exec,
+                                               workspace<T> &ws, store_hook<S> hook) const {
+    return backward_impl(in, out, exec, ws, &hook.s);
+  }
+
+private:
+  template <typename EIn, typename AIn, typename EOut, typename AOut, typename Exec, typename Store>
+  expected<void, error> backward_impl(field<EIn, Dim, AIn> const &in, field<EOut, Dim, AOut> &out,
+                                      Exec const &exec, workspace<T> &ws, Store *store) const {
     if (!all_ranks_match(in.extents() == _local_spectral && out.extents() == _local_physical))
       return unexpected(error::extents_mismatch);
     constexpr size_type C{field<EIn, Dim, AIn>::components};
     T const s{_scale_backward};
     if (_half_spectrum_on_axis0) {
-      auto &b{temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_b, _axis0.physical_extents())};
-      auto &a{temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
+      auto &b{
+          temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_b, _axis0.physical_extents())};
+      auto &a{
+          temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
       return _axis0.template run<false>(in, b, exec, T(1), ws)
           .and_then([&] { return transpose<false, C>(b, a, ws); })
-          .and_then([&] { return _local.template run<false>(a, out, exec, s, ws); });
+          .and_then([&] {
+            return _local.template run<false>(a, out, exec, s, ws, nullptr,
+                                              static_cast<no_hook const *>(nullptr), store);
+          });
     }
     auto &b{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_b, _axis0.spectral_extents())};
     auto &a{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
     return _axis0.template run<false>(in, b, exec, T(1), ws)
         .and_then([&] { return transpose<false, C>(b, a, ws); })
-        .and_then([&] { return _local.template run<false>(a, out, exec, s, ws); });
+        .and_then([&] {
+          return _local.template run<false>(a, out, exec, s, ws, nullptr,
+                                            static_cast<no_hook const *>(nullptr), store);
+        });
   }
 
+public:
 private:
   distributed_plan(mpl::communicator const &comm, plan<T, Dim> const &global,
-                   transform_domain domain, kinds_type const &kinds,
-                   plan_options const &options)
+                   transform_domain domain, kinds_type const &kinds, plan_options const &options)
       : _comm{comm}, _rank{static_cast<size_type>(_comm.rank())},
         _size{static_cast<size_type>(_comm.size())}, _scale_forward{global.scale(true)},
-        _scale_backward{global.scale(false)}, _global_physical{global.physical_extents()}, _global_spectral{global.spectral_extents()},
-        _rows{_global_physical[0], _size},
+        _scale_backward{global.scale(false)}, _global_physical{global.physical_extents()},
+        _global_spectral{global.spectral_extents()}, _rows{_global_physical[0], _size},
         _cols{_global_spectral[1], _size},
         _half_spectrum_on_axis0{global.r2c_axis() == size_type{0}},
         _local_physical{_global_physical.with_extent(0, _rows.local_size(_rank))},
@@ -169,8 +210,7 @@ private:
         _local{make_local(domain, kinds, options)}, _axis0{make_axis0(domain, kinds, options)} {}
 
   /// Transforms along axes 1..d-1 on [n0_local, N1, ...].
-  plan<T, Dim> make_local(transform_domain domain, kinds_type kinds,
-                          plan_options options) const {
+  plan<T, Dim> make_local(transform_domain domain, kinds_type kinds, plan_options options) const {
     kinds[0] = axis_kind::identity;
     options.norm = normalization::none;
     if (_half_spectrum_on_axis0)
@@ -233,8 +273,8 @@ private:
   T _scale_backward;
   extents_type _global_physical;
   extents_type _global_spectral;
-  slab_decomposition _rows;      // physical axis 0 (also axis 0 of the transpose)
-  slab_decomposition _cols;      // spectral axis 1
+  slab_decomposition _rows; // physical axis 0 (also axis 0 of the transpose)
+  slab_decomposition _cols; // spectral axis 1
   bool _half_spectrum_on_axis0;
   extents_type _local_physical;
   extents_type _local_spectral;
@@ -247,8 +287,8 @@ template <real_scalar T, std::size_t Dim>
 make_distributed_c2c_plan(mpl::communicator const &comm, extents<Dim> const &global,
                           std::array<axis_kind, Dim> const &kinds = {},
                           plan_options const &options = {}) {
-  return distributed_plan<T, Dim>::create(comm, global, transform_domain::complex_to_complex,
-                                          kinds, options);
+  return distributed_plan<T, Dim>::create(comm, global, transform_domain::complex_to_complex, kinds,
+                                          options);
 }
 
 template <real_scalar T, std::size_t Dim>
