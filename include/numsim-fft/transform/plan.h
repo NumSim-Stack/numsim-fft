@@ -51,6 +51,10 @@ struct no_hook {};
  * that the transform sees, given the C scalars stored in the input field.
  * Saves a separate pass over memory for a point-wise map before the
  * transform (e.g. a material tangent times a strain field).
+ *
+ * Hooks run inside the executor's parallel region, concurrently for
+ * different points: they must be thread-safe for distinct points and must
+ * not throw (an exception escaping an OpenMP region terminates the program).
  */
 template <typename F> struct load_hook {
   F f;
@@ -64,7 +68,8 @@ template <typename F> load_hook(F) -> load_hook<F>;
  * the work item (a block of lines) that wrote them. Items are fixed by the
  * grid, not by the executor, and one item is written by one thread: a
  * reduction accumulated per item and summed over the items in order gives
- * the same result for every executor and thread count.
+ * the same result for every executor and thread count. Same rules as for
+ * load_hook: thread-safe for distinct items, no exceptions.
  */
 template <typename S> struct store_hook {
   S &s;
@@ -461,7 +466,7 @@ private:
   template <typename S, typename Load, typename Store>
   static void copy_scaled_hooked(S const *in, S *out, size_type points, size_type C, T scale_factor,
                                  Load const *load, Store *store) {
-    std::vector<S> tmp(C);
+    std::vector<S> tmp(load ? C : 0);
     if constexpr (!std::is_same_v<Store, no_hook>)
       if (store)
         store->begin(1);
