@@ -52,9 +52,11 @@ struct no_hook {};
  * Saves a separate pass over memory for a point-wise map before the
  * transform (e.g. a material tangent times a strain field).
  *
- * Hooks run inside the executor's parallel region, concurrently for
- * different points: they must be thread-safe for distinct points and must
- * not throw (an exception escaping an OpenMP region terminates the program).
+ * Hooks run inside the executor's tasks, concurrently for different
+ * points: they must be thread-safe for distinct points. An exception
+ * thrown by a hook propagates like any exception of an executor task (the
+ * executors rethrow the first one after the pass); the output field is
+ * then unspecified.
  */
 template <typename F> struct load_hook {
   F f;
@@ -69,7 +71,7 @@ template <typename F> load_hook(F) -> load_hook<F>;
  * grid, not by the executor, and one item is written by one thread: a
  * reduction accumulated per item and summed over the items in order gives
  * the same result for every executor and thread count. Same rules as for
- * load_hook: thread-safe for distinct items, no exceptions.
+ * load_hook: thread-safe for distinct items; exceptions propagate.
  */
 template <typename S> struct store_hook {
   S &s;
