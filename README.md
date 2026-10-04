@@ -153,6 +153,13 @@ which measured fastest on one node; pass a grid to split axis 1 as well.
 `numsim_fft_distributed_benchmark` (built with MPI and
 `NUMSIM_FFT_BUILD_BENCHMARK`) compares slab and pencil plans.
 
+**Overlapped exchange.** `plan_options{.exchange_chunks = k}` (default 1)
+splits the exchange of both distributed plans into k non-blocking
+all-to-alls pipelined with the local transforms of the neighbouring chunks;
+results are bit-identical to the blocking exchange. On one 8-core node it
+gained 2–7 % (slab, one-row pencils) and nothing on 2D grids, so it is off by
+default; it is meant for networks where an exchange takes as long as a pass.
+
 ## Conventions
 
 | | |
@@ -219,8 +226,7 @@ which measured fastest on one node; pass a grid to split axis 1 as well.
 
 ## Roadmap
 
-- Overlapping the pencil exchanges with the transforms (non-blocking
-  all-to-all), distributed 1D transforms, and HPX distributed (parcelport) backend.
+- Distributed 1D transforms and an HPX distributed (parcelport) backend.
 - Radix-16 butterflies and explicit SIMD; fused axis passes for better
   multi-thread scaling.
 - Lippmann–Schwinger / Moulinec–Suquet solver on top of the field and plan API.

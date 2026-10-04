@@ -202,6 +202,72 @@ TEST(distributed_plan, error_on_one_rank_is_reported_on_all_ranks) {
   }
 }
 
+// --- Overlapped exchange (exchange_chunks > 1): same results as blocking ---
+
+namespace {
+
+/// The distributed forward/backward with k exchange chunks equals the
+/// blocking one bit for bit (the local passes do the same arithmetic per
+/// line) and the serial plan within the tolerance.
+template <typename EIn, typename EOut, std::size_t D>
+void check_overlap(extents<D> const &e, transform_domain domain, std::array<ak, D> const &kinds) {
+  using T = real_type_t<typename field<EIn, D>::scalar_type>;
+  for (std::size_t const k : {2u, 3u, 5u, 64u}) {
+    SCOPED_TRACE(testing::Message() << "chunks " << k << ", rank " << world().rank());
+    check<EIn, EOut>(e, domain, kinds, {.exchange_chunks = k});
+    auto const blocking{distributed_plan<T, D>::create(world(), e, domain, kinds).value()};
+    auto const overlapped{distributed_plan<T, D>::create(world(), e, domain, kinds, {.exchange_chunks = k}).value()};
+    auto const global_in{random_global<EIn>(e)};
+    auto const local_in{slab(global_in, 0, blocking.physical_offset(), blocking.local_physical_extents()[0])};
+    field<EOut, D> a{blocking.local_spectral_extents()}, b{blocking.local_spectral_extents()};
+    workspace<T> ws;
+    ASSERT_TRUE(blocking.forward(local_in, a, sequential_executor{}, ws).has_value());
+    ASSERT_TRUE(overlapped.forward(local_in, b, sequential_executor{}, ws).has_value());
+    EXPECT_TRUE(std::ranges::equal(a.scalars(), b.scalars()));
+    field<EIn, D> back_a{blocking.local_physical_extents()}, back_b{blocking.local_physical_extents()};
+    ASSERT_TRUE(blocking.backward(a, back_a, sequential_executor{}, ws).has_value());
+    ASSERT_TRUE(overlapped.backward(a, back_b, sequential_executor{}, ws).has_value());
+    EXPECT_TRUE(std::ranges::equal(back_a.scalars(), back_b.scalars()));
+  }
+}
+
+} // namespace
+
+TEST(distributed_plan, overlapped_exchange_c2c) {
+  check_overlap<C, C>(extents{9, 7, 6}, transform_domain::complex_to_complex, {});
+}
+
+TEST(distributed_plan, overlapped_exchange_r2c_tensor) {
+  check_overlap<tensor2, ctensor2>(extents{8, 6, 6}, transform_domain::real_to_complex, {});
+}
+
+TEST(distributed_plan, overlapped_exchange_r2c_half_spectrum_on_axis_0) {
+  check_overlap<double, C>(extents{9, 6, 5}, transform_domain::real_to_complex, {ak::periodic, ak::dct2, ak::dst1});
+}
+
+TEST(distributed_plan, overlapped_exchange_r2r_2d) {
+  check_overlap<double, double>(extents{7, 5}, transform_domain::real_to_real, {ak::dct2, ak::dst1});
+}
+
+TEST(distributed_plan, overlapped_exchange_with_hooks_matches_blocking) {
+  extents<3> const e{7, 6, 8};
+  auto const blocking{distributed_plan<double, 3>::create(world(), e, transform_domain::real_to_complex, {}).value()};
+  auto const overlapped{
+      distributed_plan<double, 3>::create(world(), e, transform_domain::real_to_complex, {}, {.exchange_chunks = 3})
+          .value()};
+  auto const local_in{slab(random_global<tensor2>(e), 0, blocking.physical_offset(),
+                           blocking.local_physical_extents()[0])};
+  auto const map = [](std::size_t point, double const *src, double *dst) {
+    for (std::size_t c{0}; c < 9; ++c)
+      dst[c] = static_cast<double>(point % 3 + 1) * src[c];
+  };
+  workspace<double> ws;
+  field<ctensor2, 3> a{blocking.local_spectral_extents()}, b{blocking.local_spectral_extents()};
+  ASSERT_TRUE(blocking.forward(local_in, a, sequential_executor{}, ws, load_hook{map}).has_value());
+  ASSERT_TRUE(overlapped.forward(local_in, b, sequential_executor{}, ws, load_hook{map}).has_value());
+  EXPECT_TRUE(std::ranges::equal(a.scalars(), b.scalars()));
+}
+
 TEST(distributed_plan, is_move_only) {
   static_assert(!std::is_copy_constructible_v<distributed_plan<double, 3>>);
   static_assert(!std::is_copy_assignable_v<distributed_plan<double, 3>>);

@@ -1,7 +1,10 @@
 // Strong scaling of the distributed transforms: slab (distributed_plan)
 // against pencils (pencil_plan, default grid and P0 x P1 given).
 //
-//   mpiexec -n P numsim_fft_distributed_benchmark [N] [repetitions] [P0 P1]
+//   mpiexec -n P numsim_fft_distributed_benchmark [N] [repetitions] [P0 P1] [chunks]
+//
+// P0 = P1 = 0 picks the default grid. With chunks > 1 the overlapped
+// exchange (plan_options::exchange_chunks) is timed next to the blocking one.
 //
 // Times one forward + backward r2c transform of a rank-2 tensor field on an
 // N^3 grid (the pair a Lippmann-Schwinger iteration needs); prints the
@@ -58,13 +61,24 @@ int main(int argc, char **argv) {
   std::array<std::size_t, 2> grid{0, 0};
   if (argc > 4)
     grid = {std::stoul(argv[3]), std::stoul(argv[4])};
+  std::size_t const chunks{argc > 5 ? std::stoul(argv[5]) : 1};
   extents<3> const e{n, n, n};
+  plan_options const overlapped{.exchange_chunks = chunks};
 
   auto const slab{make_distributed_r2c_plan<double>(comm, e).value()};
   double const t_slab{time_pair(comm, slab, repetitions)};
   auto const pencil{make_pencil_r2c_plan<double>(comm, e, {}, {}, grid).value()};
   double const t_pencil{time_pair(comm, pencil, repetitions)};
-  if (comm.rank() == 0)
-    std::printf("N=%zu ranks=%d  slab %.4f s  pencil %zux%zu %.4f s\n", n, comm.size(), t_slab,
+  double t_slab_k{0}, t_pencil_k{0};
+  if (chunks > 1) {
+    t_slab_k = time_pair(comm, make_distributed_r2c_plan<double>(comm, e, {}, overlapped).value(), repetitions);
+    t_pencil_k = time_pair(comm, make_pencil_r2c_plan<double>(comm, e, {}, overlapped, grid).value(), repetitions);
+  }
+  if (comm.rank() == 0) {
+    std::printf("N=%zu ranks=%d  slab %.4f s  pencil %zux%zu %.4f s", n, comm.size(), t_slab,
                 pencil.process_grid()[0], pencil.process_grid()[1], t_pencil);
+    if (chunks > 1)
+      std::printf("  | %zu chunks: slab %.4f s  pencil %.4f s", chunks, t_slab_k, t_pencil_k);
+    std::printf("\n");
+  }
 }

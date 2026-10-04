@@ -41,6 +41,11 @@ struct plan_options {
   normalization norm{normalization::backward};
   /// Lines transformed together (vector batch); 0 picks a cache-sized block.
   std::size_t max_batch{0};
+  /// Distributed plans only: split every exchange into this many
+  /// non-blocking all-to-alls, pipelined with the local transforms of the
+  /// neighbouring chunks. 1 (the default) exchanges in one blocking
+  /// all-to-all. Must be the same on every rank.
+  std::size_t exchange_chunks{1};
 };
 
 /// No hook (the default of the hook parameters).
@@ -528,6 +533,20 @@ private:
     extents_type const &expected_out{Forward ? _spectral : _physical};
     if (in.extents() != expected_in || out.extents() != expected_out)
       return unexpected(error::extents_mismatch);
+    return run_ptr<Forward, C>(in.data(), out.data(), exec, s, ws, scratch_in, load, store);
+  }
+
+  /// run() on raw buffers laid out as the plan's physical/spectral grids
+  /// (no extents check): distributed plans transform sub-blocks of a field
+  /// with plans of the block's extents.
+  template <bool Forward, size_type C, typename in_scalar, typename out_scalar, typename Exec,
+            typename Load = no_hook, typename Store = no_hook>
+  expected<void, error> run_ptr(in_scalar const *in, out_scalar *out, Exec const &exec, T const s,
+                                workspace<T> &ws, in_scalar *scratch_in = nullptr, Load const *load = nullptr,
+                                Store *store = nullptr) const {
+    constexpr bool in_complex{is_complex_v<in_scalar>};
+    constexpr bool out_complex{is_complex_v<out_scalar>};
+    size_type const in_points{(Forward ? _physical : _spectral).size()};
 
     // Transformed axes in order; for r2c the half-spectrum axis is excluded.
     std::array<size_type, Dim> active{};
@@ -547,13 +566,13 @@ private:
       if constexpr (in_complex && out_complex) {
         if (n_active == 0) {
           if (any_hook)
-            copy_scaled_hooked(in.data(), out.data(), in.size(), C, s, first_load, last_store);
+            copy_scaled_hooked(in, out, in_points, C, s, first_load, last_store);
           else
-            copy_scaled(in.data(), out.data(), in.scalar_size(), s);
+            copy_scaled(in, out, in_points * C, s);
         }
         for (size_type a{0}; a < n_active; ++a)
           if (!complex_pass<Forward>(exec, ws, active[a], _physical, C,
-                                     a == 0 ? in.data() : out.data(), out.data(),
+                                     a == 0 ? in : out, out,
                                      a + 1 == n_active ? s : T(1), a == 0 ? first_load : nullptr,
                                      a + 1 == n_active ? last_store : nullptr))
             return unexpected(error::hooks_unsupported);
@@ -564,13 +583,13 @@ private:
       if constexpr (!in_complex && !out_complex) {
         if (n_active == 0) {
           if (any_hook)
-            copy_scaled_hooked(in.data(), out.data(), in.size(), C, s, first_load, last_store);
+            copy_scaled_hooked(in, out, in_points, C, s, first_load, last_store);
           else
-            copy_scaled(in.data(), out.data(), in.scalar_size(), s);
+            copy_scaled(in, out, in_points * C, s);
         }
         for (size_type a{0}; a < n_active; ++a)
-          real_pass<Forward>(exec, ws, active[a], _physical, C, a == 0 ? in.data() : out.data(),
-                             out.data(), a + 1 == n_active ? s : T(1),
+          real_pass<Forward>(exec, ws, active[a], _physical, C, a == 0 ? in : out,
+                             out, a + 1 == n_active ? s : T(1),
                              a == 0 ? first_load : nullptr,
                              a + 1 == n_active ? last_store : nullptr);
         return {};
@@ -578,16 +597,16 @@ private:
       break;
     case transform_domain::real_to_complex:
       if constexpr (Forward && !in_complex && out_complex) {
-        half_spectrum_pass<true>(exec, ws, C, in.data(), out.data(), n_active == 0 ? s : T(1),
+        half_spectrum_pass<true>(exec, ws, C, in, out, n_active == 0 ? s : T(1),
                                  first_load, static_cast<no_hook *>(nullptr));
         for (size_type a{0}; a < n_active; ++a)
-          if (!complex_pass<true>(exec, ws, active[a], _spectral, C, out.data(), out.data(),
+          if (!complex_pass<true>(exec, ws, active[a], _spectral, C, out, out,
                                   a + 1 == n_active ? s : T(1)))
             return unexpected(error::hooks_unsupported);
         return {};
       } else if constexpr (!Forward && in_complex && !out_complex) {
         if (n_active == 0) {
-          half_spectrum_pass<false>(exec, ws, C, in.data(), out.data(), s,
+          half_spectrum_pass<false>(exec, ws, C, in, out, s,
                                     static_cast<no_hook const *>(nullptr), last_store);
         } else {
           // The other axes go first; the first of them writes into the
@@ -596,11 +615,11 @@ private:
           complex_type *const work{scratch_in
                                        ? scratch_in
                                        : ws.template buffer<complex_type>(
-                                             workspace_slot::backward_copy, in.scalar_size())};
+                                             workspace_slot::backward_copy, in_points * C)};
           for (size_type a{0}; a < n_active; ++a)
-            complex_pass<false>(exec, ws, active[a], _spectral, C, a == 0 ? in.data() : work, work,
+            complex_pass<false>(exec, ws, active[a], _spectral, C, a == 0 ? in : work, work,
                                 T(1));
-          half_spectrum_pass<false>(exec, ws, C, work, out.data(), s,
+          half_spectrum_pass<false>(exec, ws, C, work, out, s,
                                     static_cast<no_hook const *>(nullptr), last_store);
         }
         return {};

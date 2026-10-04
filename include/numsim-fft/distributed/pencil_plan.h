@@ -9,6 +9,7 @@
 #include "../core/expected.h"
 #include "../transform/plan.h"
 #include "pencil_transpose.h"
+#include "pipelined_exchange.h"
 #include "slab_decomposition.h"
 
 #include <mpl/mpl.hpp>
@@ -18,6 +19,8 @@
 #include <cstddef>
 #include <optional>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace numsim::fft {
 
@@ -48,6 +51,14 @@ namespace numsim::fft {
  * create(), forward(), backward() and the destructor are collective, errors
  * are agreed on by all ranks, the plan is move-only. The local passes take
  * any executor.
+ *
+ * plan_options::exchange_chunks = k > 1 pipelines one exchange per
+ * direction with the local passes: with P1 > 1 the row exchange in chunks
+ * of axis-0 rows (axis-2 pass of chunk j+1 while chunk j crosses the row,
+ * axis-1 pass as chunks arrive), with one row the column exchange in chunks
+ * of every rank's axis-0 rows (axis-2 and axis-1 passes of chunk j+1 while
+ * chunk j crosses). Results are identical to the blocking exchanges;
+ * transforms with point hooks use the blocking exchanges.
  */
 template <real_scalar T> class pencil_plan {
 public:
@@ -187,6 +198,46 @@ private:
     auto *const x_in{col_exchange ? &x_field<Ey>(ws, out) : y_out};
     using Sz = typename field<Ez, 3>::scalar_type;
     using Sy = typename field<Ey, 3>::scalar_type;
+    if (_chunks > 1 && load == nullptr && (row_exchange || col_exchange)) {
+      using Sin = typename field<EIn, 3, AIn>::scalar_type;
+      size_type const rows{_local_physical[0]};
+      size_type const in_row{_local_physical.inner(0) * C}, z_row{_plan_z.spectral_extents().inner(0) * C},
+          yi_row{_plan_y.physical_extents().inner(0) * C}, yo_row{_plan_y.spectral_extents().inner(0) * C};
+      expected<void, error> status{};
+      auto z_pass = [&](size_type r0, size_type r1) {
+        if (r1 > r0 && status)
+          status = chunk_plan(_z_chunks, r1 - r0)
+                       .template run_ptr<true, C>(static_cast<Sin const *>(in.data()) + r0 * in_row,
+                                                  z_out->data() + r0 * z_row, exec, T(1), ws);
+      };
+      auto y_pass = [&](size_type r0, size_type r1) {
+        if (r1 > r0 && status)
+          status = chunk_plan(_y_chunks, r1 - r0)
+                       .template run_ptr<true, C>(static_cast<Sz const *>(y_in->data()) + r0 * yi_row,
+                                                  y_out->data() + r0 * yo_row, exec, T(1), ws);
+      };
+      auto rows_of = [&](size_type j) { return detail::pipelined_exchange<Sz>::chunk(j, rows, _chunks); };
+      if (row_exchange) {
+        // z of chunk j+1 runs while chunk j crosses the row; y as chunks arrive
+        rows_pipeline<Sz>(C).a_to_b(
+            z_out->data(), y_in->data(), ws, [&](size_type j) { z_pass(rows_of(j).first, rows_of(j).second); },
+            [&](size_type j) { y_pass(rows_of(j).first, rows_of(j).second); });
+        if (status && col_exchange)
+          cols_transpose<Sy>(C).a_to_b(y_out->data(), x_in->data(), ws);
+      } else {
+        // one row: z and y of chunk j+1 run while chunk j crosses the column
+        cols_pipeline<Sy>(C).a_to_b(
+            y_out->data(), x_in->data(), ws,
+            [&](size_type j) {
+              z_pass(rows_of(j).first, rows_of(j).second);
+              y_pass(rows_of(j).first, rows_of(j).second);
+            },
+            [](size_type) {});
+      }
+      if (!status)
+        return status;
+      return _plan_x.template run<true>(*x_in, out, exec, _scale_forward, ws);
+    }
     return _plan_z.template run<true>(in, *z_out, exec, T(1), ws, nullptr, load, static_cast<no_hook *>(nullptr))
         .and_then([&]() -> expected<void, error> {
           if (row_exchange)
@@ -235,6 +286,43 @@ private:
                                   : y_out};
     using Sz = typename field<Ez, 3>::scalar_type;
     using Sy = typename field<Ey, 3>::scalar_type;
+    if (_chunks > 1 && store == nullptr && (row_exchange || col_exchange)) {
+      using Sout = typename field<EOut, 3, AOut>::scalar_type;
+      size_type const rows{_local_physical[0]};
+      size_type const out_row{_local_physical.inner(0) * C}, z_row{_plan_z.spectral_extents().inner(0) * C},
+          yi_row{_plan_y.spectral_extents().inner(0) * C}, yo_row{_plan_y.physical_extents().inner(0) * C};
+      expected<void, error> status{};
+      auto y_pass = [&](size_type r0, size_type r1) {
+        if (r1 > r0 && status)
+          status = chunk_plan(_y_chunks, r1 - r0)
+                       .template run_ptr<false, C>(static_cast<Sy const *>(y_in->data()) + r0 * yi_row,
+                                                   y_out->data() + r0 * yo_row, exec, T(1), ws);
+      };
+      auto z_pass = [&](size_type r0, size_type r1) {
+        if (r1 > r0 && status)
+          status = chunk_plan(_z_chunks, r1 - r0)
+                       .template run_ptr<false, C>(static_cast<Sz const *>(z_in->data()) + r0 * z_row,
+                                                   static_cast<Sout *>(out.data()) + r0 * out_row, exec,
+                                                   _scale_backward, ws);
+      };
+      auto rows_of = [&](size_type j) { return detail::pipelined_exchange<Sz>::chunk(j, rows, _chunks); };
+      status = _plan_x.template run<false>(in, *x_out, exec, T(1), ws);
+      if (!status)
+        return status;
+      if (row_exchange) {
+        if (col_exchange)
+          cols_transpose<Sy>(C).b_to_a(x_out->data(), y_in->data(), ws);
+        rows_pipeline<Sz>(C).b_to_a(
+            y_out->data(), z_in->data(), ws, [&](size_type j) { y_pass(rows_of(j).first, rows_of(j).second); },
+            [&](size_type j) { z_pass(rows_of(j).first, rows_of(j).second); });
+      } else {
+        cols_pipeline<Sy>(C).b_to_a(x_out->data(), y_in->data(), ws, [](size_type) {}, [&](size_type j) {
+          y_pass(rows_of(j).first, rows_of(j).second);
+          z_pass(rows_of(j).first, rows_of(j).second);
+        });
+      }
+      return status;
+    }
     return _plan_x.template run<false>(in, *x_out, exec, T(1), ws)
         .and_then([&]() -> expected<void, error> {
           if (col_exchange)
@@ -295,7 +383,10 @@ private:
         _plan_z{axis_plan(domain, kinds, options, 2, {_local_physical[0], _local_physical[1], _global_physical[2]})},
         _plan_y{axis_plan(domain, kinds, options, 1, {_local_physical[0], _global_physical[1], _e2.local_size(_r1)})},
         _plan_x{axis_plan(domain, kinds, options, 0,
-                          {_global_physical[0], _e1.local_size(_r0), _e2.local_size(_r1)})} {}
+                          {_global_physical[0], _e1.local_size(_r0), _e2.local_size(_r1)})},
+        _chunks{std::max<size_type>(options.exchange_chunks, 1)},
+        _z_chunks{make_chunk_plans(domain, kinds, options, 2, _plan_z.physical_extents())},
+        _y_chunks{make_chunk_plans(domain, kinds, options, 1, _plan_y.physical_extents())} {}
 
   /// One-axis plan on the local layout of its pass: r2c if the axis is the
   /// r2c axis, real before it, complex after it.
@@ -314,6 +405,42 @@ private:
         domain = transform_domain::complex_to_complex;
     }
     return plan<T, 3>::create(shape, domain, kinds, options).value();
+  }
+
+  /// The row exchange in chunks of the outer (axis-0) rows.
+  template <typename S> detail::pipelined_exchange<S> rows_pipeline(size_type C) const {
+    return {_row, _local_physical[0], _d1, _e2, C, _chunks, detail::pipelined_exchange<S>::split::outer,
+            workspace_slot::exchange_cache};
+  }
+  /// The column exchange in chunks of every rank's axis-0 rows.
+  template <typename S> detail::pipelined_exchange<S> cols_pipeline(size_type C) const {
+    return {_col, 1, _d0, _e1, _e2.local_size(_r1) * C, _chunks, detail::pipelined_exchange<S>::split::a,
+            workspace_slot::exchange_cache};
+  }
+
+  using chunk_plans = std::vector<std::pair<size_type, plan<T, 3>>>;
+
+  static plan<T, 3> const &chunk_plan(chunk_plans const &plans, size_type rows) {
+    for (auto const &[n, p] : plans)
+      if (n == rows)
+        return p;
+    return plans.front().second; // not reached: every chunk size has a plan
+  }
+
+  /// Plans of one pass for every distinct chunk row count (exchange_chunks > 1).
+  chunk_plans make_chunk_plans(transform_domain domain, kinds_type const &kinds, plan_options const &options,
+                               size_type axis, extents_type const &shape) const {
+    chunk_plans plans;
+    if (_chunks < 2)
+      return plans;
+    for (size_type j{0}; j < _chunks; ++j) {
+      auto const [r0, r1]{detail::pipelined_exchange<T>::chunk(j, shape[0], _chunks)};
+      size_type const n{r1 - r0};
+      if (n == 0 || std::ranges::any_of(plans, [n](auto const &p) { return p.first == n; }))
+        continue;
+      plans.emplace_back(n, axis_plan(domain, kinds, options, axis, shape.with_extent(0, n)));
+    }
+    return plans;
   }
 
   /// Axes 1 <-> 2 within the row: [n0][n1(r1)][S2] <-> [n0][N1][s2(r1)].
@@ -361,6 +488,9 @@ private:
   plan<T, 3> _plan_z;
   plan<T, 3> _plan_y;
   plan<T, 3> _plan_x;
+  size_type _chunks;     // exchange_chunks
+  chunk_plans _z_chunks; // axis-2 plans per chunk row count
+  chunk_plans _y_chunks; // axis-1 plans per chunk row count
 };
 
 template <real_scalar T>
