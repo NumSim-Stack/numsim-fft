@@ -2,6 +2,7 @@
 #define NUMSIM_FFT_FIELD_ALGEBRA_H
 
 #include "../core/scalar_traits.h"
+#include "../execution/chunking.h"
 #include "../execution/executor.h"
 #include "../execution/sequential.h"
 #include "field.h"
@@ -58,14 +59,6 @@ R lane_sum(std::size_t i0, std::size_t i1, F const &f) {
   for (std::size_t l{0}; l < lanes; ++l)
     sum += acc[l];
   return sum;
-}
-
-template <typename Exec, typename F> void chunked_for(std::size_t n, Exec const &exec, F const &f) {
-  if (n == 0)
-    return;
-  std::size_t const workers{std::max<std::size_t>(1, exec.concurrency())};
-  std::size_t const chunks{std::min<std::size_t>(n, workers == 1 ? 1 : 8 * workers)};
-  exec.bulk(chunks, [&](std::size_t c) { f(c * n / chunks, (c + 1) * n / chunks); });
 }
 
 } // namespace detail
