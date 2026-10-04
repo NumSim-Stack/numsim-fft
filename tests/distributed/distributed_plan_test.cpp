@@ -87,6 +87,38 @@ using ctensor2 = tmech::tensor<C, 3, 2>;
 
 } // namespace
 
+TEST(distributed_plan, load_and_store_hooks_act_on_the_local_points) {
+  extents<3> const e{7, 6, 8};
+  auto const dist{
+      distributed_plan<double, 3>::create(world(), e, transform_domain::real_to_complex, {}).value()};
+  auto const global_in{random_global<tensor2>(e)};
+  auto const local_in{slab(global_in, 0, dist.physical_offset(), dist.local_physical_extents()[0])};
+  auto const map = [](std::size_t point, double const *src, double *dst) {
+    for (std::size_t c{0}; c < 9; ++c)
+      dst[c] = static_cast<double>(point % 3 + 1) * src[c];
+  };
+  field<tensor2, 3> mapped{local_in.extents()};
+  for (std::size_t p{0}; p < local_in.size(); ++p)
+    map(p, local_in.data() + 9 * p, mapped.data() + 9 * p);
+  workspace<double> ws;
+  field<ctensor2, 3> plain{dist.local_spectral_extents()}, hooked{dist.local_spectral_extents()};
+  ASSERT_TRUE(dist.forward(mapped, plain, sequential_executor{}, ws).has_value());
+  ASSERT_TRUE(dist.forward(local_in, hooked, sequential_executor{}, ws, load_hook{map}).has_value());
+  EXPECT_TRUE(std::ranges::equal(plain.scalars(), hooked.scalars()));
+
+  struct counter {
+    std::vector<int> visits;
+    void begin(std::size_t) {}
+    void operator()(std::size_t, std::size_t point, double const *) { ++visits[point]; }
+  } count{std::vector<int>(local_in.size(), 0)};
+  field<tensor2, 3> back{local_in.extents()}, back_hooked{local_in.extents()};
+  ASSERT_TRUE(dist.backward(plain, back, sequential_executor{}, ws).has_value());
+  ASSERT_TRUE(dist.backward(plain, back_hooked, sequential_executor{}, ws, store_hook{count}).has_value());
+  EXPECT_TRUE(std::ranges::equal(back.scalars(), back_hooked.scalars()));
+  for (int v : count.visits)
+    EXPECT_EQ(v, 1);
+}
+
 TEST(distributed_plan, c2c_3d_periodic) {
   check<C, C>(extents{7, 6, 5}, transform_domain::complex_to_complex, {});
 }
