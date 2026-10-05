@@ -100,6 +100,7 @@ inline constexpr std::size_t pencil_y{6};        ///< pencil: field around the a
 inline constexpr std::size_t pencil_x{7};        ///< pencil: field around the axis-0 pass
 inline constexpr std::size_t pencil_rows_cache{8}; ///< pencil: MPI layouts, axes 1 <-> 2
 inline constexpr std::size_t pencil_cols_cache{9}; ///< pencil: MPI layouts, axes 0 <-> 1
+inline constexpr std::size_t exchange_cache{10};   ///< distributed: pipelined exchange counts
 inline constexpr std::size_t user_base{16};
 } // namespace workspace_slot
 

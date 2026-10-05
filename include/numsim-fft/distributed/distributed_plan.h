@@ -5,15 +5,20 @@
 #error "numsim-fft: distributed plans need NUMSIM_FFT_ENABLE_MPI"
 #endif
 
+#include "collective.h"
 #include "../core/error.h"
 #include "../core/expected.h"
 #include "../transform/plan.h"
+#include "pipelined_exchange.h"
 #include "slab_decomposition.h"
 #include "transpose.h"
 
 #include <mpl/mpl.hpp>
 
+#include <algorithm>
 #include <array>
+#include <utility>
+#include <vector>
 #include <cstddef>
 
 namespace numsim::fft {
@@ -46,6 +51,8 @@ namespace numsim::fft {
  *
  * Pass a workspace in loops: the pre/post-transpose fields, the MPI pack
  * buffers and the MPI layouts then persist between calls.
+ *
+ * plan_options::exchange_chunks > 1 pipelines the exchange (no hooks; identical results).
  */
 template <real_scalar T, std::size_t Dim> class distributed_plan {
   static_assert(Dim >= 2, "distributed_plan: slab decomposition needs Dim >= 2");
@@ -62,6 +69,8 @@ public:
     auto serial{plan<T, Dim>::create(global, domain, kinds, options)};
     if (!serial)
       return unexpected(serial.error());
+    if (!detail::same_on_all_ranks(comm, options.exchange_chunks))
+      return unexpected(error::options_mismatch);
     return distributed_plan{comm, *serial, domain, kinds, options};
   }
 
@@ -118,6 +127,19 @@ private:
       return unexpected(error::extents_mismatch);
     constexpr size_type C{field<EIn, Dim, AIn>::components};
     T const s{_scale_forward};
+    if (_chunks > 1 && load == nullptr) {
+      if (_half_spectrum_on_axis0) {
+        auto &a{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
+        auto &b{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_b, _axis0.physical_extents())};
+        return forward_overlapped<C>(in, a, b, exec, ws).and_then([&] {
+          return _axis0.template run<true>(b, out, exec, s, ws);
+        });
+      }
+      auto &a{temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
+      return forward_overlapped<C>(in, a, out, exec, ws).and_then([&] {
+        return _axis0.template run<true>(out, out, exec, s, ws);
+      });
+    }
     if (_half_spectrum_on_axis0) {
       // real local phase, real transpose, then r2c along axis 0
       auto &a{
@@ -173,6 +195,20 @@ private:
       return unexpected(error::extents_mismatch);
     constexpr size_type C{field<EIn, Dim, AIn>::components};
     T const s{_scale_backward};
+    if (_chunks > 1 && store == nullptr) {
+      if (_half_spectrum_on_axis0) {
+        auto &b{temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_b, _axis0.physical_extents())};
+        auto &a{temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
+        return _axis0.template run<false>(in, b, exec, T(1), ws).and_then([&] {
+          return backward_overlapped<C>(b, a, out, exec, s, ws);
+        });
+      }
+      auto &b{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_b, _axis0.spectral_extents())};
+      auto &a{temporary<field<EIn, Dim>>(ws, workspace_slot::transpose_a, _local.spectral_extents())};
+      return _axis0.template run<false>(in, b, exec, T(1), ws).and_then([&] {
+        return backward_overlapped<C>(b, a, out, exec, s, ws);
+      });
+    }
     if (_half_spectrum_on_axis0) {
       auto &b{
           temporary<field<EOut, Dim>>(ws, workspace_slot::transpose_b, _axis0.physical_extents())};
@@ -195,6 +231,87 @@ private:
         });
   }
 
+  /// Local passes on chunks of rows pipelined with the rows -> cols
+  /// exchange (pre: the local transform's output, dst: the transposed field).
+  template <size_type C, typename EIn, typename AIn, typename Epre, typename Edst, typename Adst, typename Exec>
+  expected<void, error> forward_overlapped(field<EIn, Dim, AIn> const &in, field<Epre, Dim> &pre,
+                                           field<Edst, Dim, Adst> &dst, Exec const &exec, workspace<T> &ws) const {
+    using S = typename field<Epre, Dim>::scalar_type;
+    if (!exchange_fits_int(C))
+      return unexpected(error::message_too_large);
+    size_type const rows{_local_physical[0]}, in_row{_local_physical.inner(0) * C},
+        pre_row{_local.spectral_extents().inner(0) * C};
+    expected<void, error> status{};
+    exchange<S>(C).a_to_b(
+        pre.data(), dst.data(), ws,
+        [&](size_type j) {
+          auto const [r0, r1]{detail::pipelined_exchange<S>::chunk(j, rows, _chunks)};
+          if (r1 > r0 && status)
+            status = local_chunk(r1 - r0).template run_ptr<true, C>(in.data() + r0 * in_row,
+                                                                      pre.data() + r0 * pre_row, exec, T(1), ws);
+        },
+        [](size_type) {});
+    return status;
+  }
+
+  /// cols -> rows exchange pipelined with the local backward passes.
+  template <size_type C, typename Esrc, typename Epre, typename EOut, typename AOut, typename Exec>
+  expected<void, error> backward_overlapped(field<Esrc, Dim> const &src, field<Epre, Dim> &pre,
+                                            field<EOut, Dim, AOut> &out, Exec const &exec, T s,
+                                            workspace<T> &ws) const {
+    using S = typename field<Epre, Dim>::scalar_type;
+    if (!exchange_fits_int(C))
+      return unexpected(error::message_too_large);
+    size_type const rows{_local_physical[0]}, out_row{_local_physical.inner(0) * C},
+        pre_row{_local.spectral_extents().inner(0) * C};
+    expected<void, error> status{};
+    exchange<S>(C).b_to_a(
+        src.data(), pre.data(), ws, [](size_type) {},
+        [&](size_type j) {
+          auto const [r0, r1]{detail::pipelined_exchange<S>::chunk(j, rows, _chunks)};
+          if (r1 > r0 && status)
+            status = local_chunk(r1 - r0).template run_ptr<false, C>(pre.data() + r0 * pre_row,
+                                                                       out.data() + r0 * out_row, exec, s, ws);
+        });
+    return status;
+  }
+
+  /// rows <-> cols as a pipelined exchange: a = physical axis 0 (rows),
+  /// b = spectral axis 1 (cols), chunks of every rank's rows.
+  template <typename S> detail::pipelined_exchange<S> exchange(size_type C) const {
+    auto const &ref{_half_spectrum_on_axis0 ? _global_physical : _global_spectral};
+    return {_comm, 1, _rows, _cols, ref.inner(1) * C, _chunks, detail::pipelined_exchange<S>::split::a,
+            workspace_slot::exchange_cache};
+  }
+
+  bool exchange_fits_int(size_type C) const noexcept {
+    auto const &ref{_half_spectrum_on_axis0 ? _global_physical : _global_spectral};
+    return detail::transpose_fits_int(_rows, _cols, ref.inner(1) * C);
+  }
+
+  /// The local plan for a chunk of `rows` rows.
+  plan<T, Dim> const &local_chunk(size_type rows) const {
+    for (auto const &[n, p] : _local_chunks)
+      if (n == rows)
+        return p;
+    return _local; // not reached: every chunk size has a plan
+  }
+
+  std::vector<std::pair<size_type, plan<T, Dim>>> make_local_chunks(transform_domain domain, kinds_type const &kinds,
+                                                                     plan_options const &options) const {
+    std::vector<std::pair<size_type, plan<T, Dim>>> chunks;
+    if (_chunks < 2)
+      return chunks;
+    for (size_type j{0}; j < _chunks; ++j) {
+      auto const [r0, r1]{detail::chunk_range(j, _local_physical[0], _chunks)};
+      size_type const n{r1 - r0};
+      if (n == 0 || std::ranges::any_of(chunks, [n](auto const &c) { return c.first == n; }))
+        continue;
+      chunks.emplace_back(n, make_local(domain, kinds, options, _local_physical.with_extent(0, n)));
+    }
+    return chunks;
+  }
+
 public:
 private:
   distributed_plan(mpl::communicator const &comm, plan<T, Dim> const &global,
@@ -207,15 +324,18 @@ private:
         _half_spectrum_on_axis0{global.r2c_axis() == size_type{0}},
         _local_physical{_global_physical.with_extent(0, _rows.local_size(_rank))},
         _local_spectral{_global_spectral.with_extent(1, _cols.local_size(_rank))},
-        _local{make_local(domain, kinds, options)}, _axis0{make_axis0(domain, kinds, options)} {}
+        _local{make_local(domain, kinds, options, _local_physical)}, _axis0{make_axis0(domain, kinds, options)},
+        _chunks{std::max<size_type>(options.exchange_chunks, 1)},
+        _local_chunks{make_local_chunks(domain, kinds, options)} {}
 
-  /// Transforms along axes 1..d-1 on [n0_local, N1, ...].
-  plan<T, Dim> make_local(transform_domain domain, kinds_type kinds, plan_options options) const {
+  /// Transforms along axes 1..d-1 on [rows, N1, ...].
+  plan<T, Dim> make_local(transform_domain domain, kinds_type kinds, plan_options options,
+                          extents_type const &shape) const {
     kinds[0] = axis_kind::identity;
     options.norm = normalization::none;
     if (_half_spectrum_on_axis0)
       domain = transform_domain::real_to_real; // axes 1.. are DCT/DST or identity
-    return plan<T, Dim>::create(_local_physical, domain, kinds, options).value();
+    return plan<T, Dim>::create(shape, domain, kinds, options).value();
   }
 
   /// Transform along axis 0 on the transposed layout [N0, m1_local, ...].
@@ -280,6 +400,8 @@ private:
   extents_type _local_spectral;
   plan<T, Dim> _local;
   plan<T, Dim> _axis0;
+  size_type _chunks;                                              // exchange_chunks
+  std::vector<std::pair<size_type, plan<T, Dim>>> _local_chunks; // local plans per chunk row count
 };
 
 template <real_scalar T, std::size_t Dim>

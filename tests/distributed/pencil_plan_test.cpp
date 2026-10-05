@@ -2,6 +2,7 @@
 // the same global input, transforms its pencil with pencil_plan on several
 // process grids and compares with the matching block of the serial transform.
 
+#include <numsim-fft/distributed/distributed_plan.h>
 #include <numsim-fft/distributed/pencil_plan.h>
 #include <numsim-fft/execution/openmp.h>
 
@@ -204,6 +205,60 @@ TEST(pencil_plan, load_and_store_hooks_act_on_the_local_points) {
     EXPECT_EQ(v, 1);
 }
 
+// --- Overlapped exchange (exchange_chunks > 1): same results as blocking ---
+
+namespace {
+
+template <typename EIn, typename EOut>
+void check_overlap(extents<3> const &e, transform_domain domain, std::array<ak, 3> const &kinds) {
+  using T = real_type_t<typename field<EIn, 3>::scalar_type>;
+  auto const global_in{random_global<EIn>(e)};
+  for (auto const grid : grids())
+    for (std::size_t const k : {2u, 3u, 7u}) {
+      SCOPED_TRACE(testing::Message() << "grid " << grid[0] << " x " << grid[1] << ", chunks " << k << ", rank "
+                                      << world().rank());
+      auto const blocking{pencil_plan<T>::create(world(), e, domain, kinds, {}, grid).value()};
+      auto const overlapped{pencil_plan<T>::create(world(), e, domain, kinds, {.exchange_chunks = k}, grid).value()};
+      auto const local_in{block(global_in, blocking.physical_offsets(), blocking.local_physical_extents())};
+      field<EOut, 3> a{blocking.local_spectral_extents()}, b{blocking.local_spectral_extents()};
+      workspace<T> ws;
+      ASSERT_TRUE(blocking.forward(local_in, a, sequential_executor{}, ws).has_value());
+      ASSERT_TRUE(overlapped.forward(local_in, b, sequential_executor{}, ws).has_value());
+      EXPECT_TRUE(std::ranges::equal(a.scalars(), b.scalars()));
+      field<EIn, 3> back_a{blocking.local_physical_extents()}, back_b{blocking.local_physical_extents()};
+      ASSERT_TRUE(blocking.backward(a, back_a, sequential_executor{}, ws).has_value());
+      ASSERT_TRUE(overlapped.backward(a, back_b, sequential_executor{}, ws).has_value());
+      EXPECT_TRUE(std::ranges::equal(back_a.scalars(), back_b.scalars()));
+    }
+}
+
+} // namespace
+
+TEST(pencil_plan, overlapped_exchange_c2c) {
+  check_overlap<C, C>(extents{7, 6, 5}, transform_domain::complex_to_complex, {});
+}
+
+TEST(pencil_plan, overlapped_exchange_r2c_tensor_axis_2) {
+  check_overlap<tensor2, ctensor2>(extents{8, 6, 6}, transform_domain::real_to_complex, {});
+}
+
+TEST(pencil_plan, overlapped_exchange_r2c_axis_1) {
+  check_overlap<double, C>(extents{5, 8, 6}, transform_domain::real_to_complex, {ak::periodic, ak::periodic, ak::dct2});
+}
+
+TEST(pencil_plan, overlapped_exchange_r2c_axis_0) {
+  check_overlap<double, C>(extents{9, 6, 5}, transform_domain::real_to_complex, {ak::periodic, ak::dct2, ak::dst1});
+}
+
+TEST(pencil_plan, overlapped_exchange_r2r) {
+  check_overlap<double, double>(extents{6, 5, 7}, transform_domain::real_to_real, {ak::dct1, ak::dst2, ak::dct4});
+}
+
+TEST(pencil_plan, overlapped_exchange_against_the_serial_plan) {
+  for (std::size_t const k : {2u, 4u})
+    check<tensor2, ctensor2>(extents{8, 7, 6}, transform_domain::real_to_complex, {}, {.exchange_chunks = k});
+}
+
 TEST(pencil_plan, is_move_only) {
   static_assert(!std::is_copy_constructible_v<pencil_plan<double>>);
   auto p{make_pencil_c2c_plan<double>(world(), extents{4, 4, 4}).value()};
@@ -253,5 +308,21 @@ TEST(pencil_plan, plans_of_different_grids_share_a_workspace) {
     workspace<double> ws;
     forward_matches_serial(world(), {8, 6, 5}, grid, ws);
     forward_matches_serial(world(), {11, 7, 5}, grid, ws);
+  }
+}
+
+TEST(pencil_plan, exchange_chunks_that_differ_between_ranks_are_rejected_on_every_rank) {
+  plan_options options;
+  options.exchange_chunks = static_cast<std::size_t>(world().rank()) + 1; // differs when P > 1
+  auto const p{pencil_plan<double>::create(world(), {8, 6, 5}, transform_domain::complex_to_complex, {}, options)};
+  auto const d{distributed_plan<double, 3>::create(world(), {8, 6, 5}, transform_domain::complex_to_complex, {}, options)};
+  if (world().size() == 1) {
+    EXPECT_TRUE(p.has_value());
+    EXPECT_TRUE(d.has_value());
+  } else {
+    ASSERT_FALSE(p.has_value());
+    EXPECT_EQ(p.error(), error::options_mismatch);
+    ASSERT_FALSE(d.has_value());
+    EXPECT_EQ(d.error(), error::options_mismatch);
   }
 }
