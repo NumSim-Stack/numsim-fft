@@ -13,20 +13,8 @@
 
 namespace numsim::fft::detail {
 
-/**
- * @brief Exchange of two adjacent axes over a (sub-)communicator, batched
- * over the axes in front of them, for scalars S.
- *
- *  - a layout: [outer][a_local][B][R], the first axis split by `a`;
- *  - b layout: [outer][A][b_local][R], the second axis split by `b`.
- *
- * `outer` is the local product of the axes in front, R the block of
- * scalars behind (remaining axes times components). The rank's own block is
- * copied directly; the others are packed into the workspace's send buffer
- * and exchanged with one MPI_Alltoallv (received in place when outer == 1,
- * else through the receive buffer). The MPI layouts are cached in
- * `cache_slot`.
- */
+/// Exchange of two adjacent axes over a (sub-)communicator: a layout [outer][a_local][B][R]
+/// <-> b layout [outer][A][b_local][R]; MPI layouts cached in `cache_slot`.
 template <typename S> class pencil_transpose {
 public:
   using size_type = std::size_t;
@@ -36,9 +24,7 @@ public:
       : _comm{comm}, _outer{outer}, _a{a}, _b{b}, _R{R}, _slot{cache_slot},
         _rank{static_cast<size_type>(comm.rank())}, _size{static_cast<size_type>(comm.size())} {}
 
-  /// Largest message and buffer of any rank with at most `outer_max` outer
-  /// rows fit MPI's int counts. A pure function of the decompositions, so
-  /// every rank of every sub-communicator reaches the same verdict.
+  /// Messages and buffers fit MPI int counts (same verdict on every rank).
   static bool fits_int(size_type outer_max, slab_decomposition a, slab_decomposition b, size_type R) noexcept {
     size_type const a_max{a.local_size(0)}, b_max{b.local_size(0)};
     constexpr auto limit{static_cast<size_type>(std::numeric_limits<int>::max())};
@@ -126,31 +112,31 @@ public:
   }
 
 private:
+  /// What the cached layouts depend on.
+  struct cache_key {
+    MPI_Comm comm{MPI_COMM_NULL};
+    size_type rank{0}, size{0}, outer{0}, R{0}, A{0}, B{0};
+    bool operator==(cache_key const &) const = default;
+  };
   struct cache {
-    size_type outer{0}, R{0}, A{0}, B{0}, size{0};
+    cache_key key;
     mpl::contiguous_layouts<S> ab_send, ab_recv, ba_send, ba_recv;
     mpl::displacements ab_send_d, ab_recv_d, ba_send_d, ba_recv_d;
   };
 
-  template <typename T> cache const &layouts(workspace<T> &ws) const {
-    return ws.template object<cache>(
-        _slot, [&] { return build_cache(); },
-        [&](cache const &c) {
-          return c.outer == _outer && c.R == _R && c.A == _a.global_size() && c.B == _b.global_size() &&
-                 c.size == _size;
-        });
+  cache_key key() const noexcept {
+    return {_comm.native_handle(), _rank, _size, _outer, _R, _a.global_size(), _b.global_size()};
   }
 
-  /// The own block never goes through MPI (count 0). Packed blocks follow
-  /// each other in q order; with outer == 1 the blocks of the b layout are
-  /// addressed in place (displacement offset_a(q) rows).
+  template <typename T> cache const &layouts(workspace<T> &ws) const {
+    return ws.template object<cache>(
+        _slot, [&] { return build_cache(); }, [&](cache const &c) { return c.key == key(); });
+  }
+
+  /// Own block: count 0; packed blocks in q order; outer == 1 receives in place.
   cache build_cache() const {
     size_type const al{_a.local_size(_rank)}, bl{_b.local_size(_rank)};
-    cache c{_outer,
-            _R,
-            _a.global_size(),
-            _b.global_size(),
-            _size,
+    cache c{key(),
             mpl::contiguous_layouts<S>(_size),
             mpl::contiguous_layouts<S>(_size),
             mpl::contiguous_layouts<S>(_size),
