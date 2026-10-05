@@ -96,6 +96,10 @@ inline constexpr std::size_t transpose_b{2};     ///< distributed: transposed fi
 inline constexpr std::size_t send{3};            ///< distributed: packed send buffer
 inline constexpr std::size_t receive{4};         ///< distributed: packed receive buffer
 inline constexpr std::size_t transpose_cache{5}; ///< distributed: MPI layouts
+inline constexpr std::size_t pencil_y{6};        ///< pencil: field around the axis-1 pass
+inline constexpr std::size_t pencil_x{7};        ///< pencil: field around the axis-0 pass
+inline constexpr std::size_t pencil_rows_cache{8}; ///< pencil: MPI layouts, axes 1 <-> 2
+inline constexpr std::size_t pencil_cols_cache{9}; ///< pencil: MPI layouts, axes 0 <-> 1
 inline constexpr std::size_t user_base{16};
 } // namespace workspace_slot
 

@@ -28,6 +28,7 @@
 namespace numsim::fft {
 
 template <real_scalar T, std::size_t Dim> class distributed_plan;
+template <real_scalar T> class pencil_plan;
 
 /// Scalar types of the physical-space and spectral fields.
 enum class transform_domain {
@@ -254,6 +255,7 @@ public:
 
 private:
   template <real_scalar, std::size_t> friend class distributed_plan;
+  template <real_scalar> friend class pencil_plan;
 
   struct axis_plans {
     std::optional<kernel::c2c_plan_1d<T>> c2c;

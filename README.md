@@ -137,6 +137,22 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
   collective (the plan duplicates the communicator and is move-only). Errors
   are agreed on by all ranks, so a mismatch on one rank is returned on every rank.
 
+**Pencils (3D).** `pencil_plan` distributes over a P0 x P1 process grid and
+uses up to N0 x N1 ranks (slabs: at most N0):
+
+```cpp
+auto plan = make_pencil_r2c_plan<double>(comm, extents{256, 256, 256}, {}, {}, {8, 4}).value();
+// physical [n0(r0), n1(r1), N2] at physical_offsets(),
+// spectral [S0, s1(r0), s2(r1)] at spectral_offsets(), r0 = rank / P1, r1 = rank % P1
+```
+
+The forward transform exchanges axes 1 and 2 within each row of the grid and
+axes 0 and 1 within each column (two all-to-alls over P1 and P0 ranks). The
+default grid is one row (P1 = 1, one exchange) while the ranks fit axis 0,
+which measured fastest on one node; pass a grid to split axis 1 as well.
+`numsim_fft_distributed_benchmark` (built with MPI and
+`NUMSIM_FFT_BUILD_BENCHMARK`) compares slab and pencil plans.
+
 ## Conventions
 
 | | |
@@ -203,8 +219,8 @@ plan.forward(eps, eps_hat, openmp_executor{});           // hybrid MPI + OpenMP
 
 ## Roadmap
 
-- Pencil decomposition (2D process grids via MPL cartesian communicators),
-  distributed 1D transforms, and HPX distributed (parcelport) backend.
+- Overlapping the pencil exchanges with the transforms (non-blocking
+  all-to-all), distributed 1D transforms, and HPX distributed (parcelport) backend.
 - Radix-16 butterflies and explicit SIMD; fused axis passes for better
   multi-thread scaling.
 - Lippmann–Schwinger / Moulinec–Suquet solver on top of the field and plan API.
