@@ -87,6 +87,39 @@ using ctensor2 = tmech::tensor<C, 3, 2>;
 
 } // namespace
 
+namespace {
+/// Forward with `ws` on `comm` and compare with the serial transform.
+void forward_matches_serial(mpl::communicator const &comm, extents<3> const &e, workspace<double> &ws) {
+  auto const serial{plan<double, 3>::create(e, transform_domain::complex_to_complex, {}).value()};
+  auto const global_in{random_global<C>(e)};
+  field<C, 3> global_out{serial.spectral_extents()};
+  ASSERT_TRUE(serial.forward(global_in, global_out).has_value());
+  auto const dist{distributed_plan<double, 3>::create(comm, e, transform_domain::complex_to_complex, {}).value()};
+  auto const local_in{slab(global_in, 0, dist.physical_offset(), dist.local_physical_extents()[0])};
+  field<C, 3> local_out{dist.local_spectral_extents()};
+  ASSERT_TRUE(dist.forward(local_in, local_out, sequential_executor{}, ws).has_value());
+  auto const expected{slab(global_out, 1, dist.spectral_offset(), dist.local_spectral_extents()[1])};
+  EXPECT_LT(test::relative_error(local_out.scalars(), expected.scalars()), test::tolerance<double>(e.size(), 16))
+      << "rank " << world().rank();
+}
+} // namespace
+
+TEST(distributed_plan, plans_on_differently_ordered_communicators_share_a_workspace) {
+  int const P{world().size()};
+  mpl::communicator const reversed{mpl::communicator::split, world(), 0, P - 1 - world().rank()};
+  workspace<double> ws;
+  forward_matches_serial(world(), {8, 6, 5}, ws);
+  forward_matches_serial(reversed, {8, 6, 5}, ws);
+  forward_matches_serial(world(), {8, 6, 5}, ws);
+}
+
+TEST(distributed_plan, plans_of_different_grids_share_a_workspace) {
+  workspace<double> ws;
+  forward_matches_serial(world(), {8, 6, 5}, ws);
+  forward_matches_serial(world(), {11, 6, 5}, ws); // same inner size, other rows
+  forward_matches_serial(world(), {8, 9, 5}, ws);
+}
+
 TEST(distributed_plan, load_and_store_hooks_act_on_the_local_points) {
   extents<3> const e{7, 6, 8};
   auto const dist{
