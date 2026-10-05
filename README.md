@@ -116,6 +116,14 @@ auto x = irfft(X, eps.extents()).value();
 all taking an executor; reductions sum in a fixed chunk order, so results are
 identical across executors.
 
+`field<E, D> f{extents, exec}` builds a zero field whose memory the
+executor's workers write first, in the chunks of the field algebra. On NUMA
+machines the pages are then spread over the nodes of the executor's threads
+instead of all on the constructing thread's node (`openmp_executor` schedules
+chunks dynamically, so a chunk is not always handled by the thread that
+touched it); build the fields of a parallel solver this way. On one NUMA node it only makes construction faster
+(parallel zeroing); `field<E, D> f{extents}` zeroes on the calling thread.
+
 For spectral derivatives, `wave_number(kind, k, n, h)`, `wave_vector(plan, index, spacing)`
 and `is_nyquist(k, n)` give the wave numbers of every axis kind; see
 [`examples/spectral_strain.cpp`](examples/spectral_strain.cpp).

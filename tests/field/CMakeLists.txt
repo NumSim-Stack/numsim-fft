@@ -1,1 +1,1 @@
-add_numsim_fft_test(field_test SOURCES element_traits_test.cpp field_test.cpp algebra_test.cpp)
+add_numsim_fft_test(field_test SOURCES element_traits_test.cpp field_test.cpp algebra_test.cpp first_touch_test.cpp)

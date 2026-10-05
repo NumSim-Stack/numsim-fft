@@ -3,19 +3,58 @@
 
 #include "../core/aligned_allocator.h"
 #include "../core/mdspan.h"
+#include "../execution/chunking.h"
+#include "../execution/executor.h"
 #include "../layout/extents.h"
 #include "element_traits.h"
 
+#include <algorithm>
 #include <array>
 #include <concepts>
 #include <cstddef>
 #include <memory>
 #include <ranges>
 #include <span>
+#include <type_traits>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace numsim::fft {
+
+namespace detail {
+
+/// Allocator whose value-less construct() leaves memory unwritten (for first touch).
+template <typename Allocator> struct no_init_allocator : Allocator {
+  using value_type = typename std::allocator_traits<Allocator>::value_type;
+  template <typename U> struct rebind {
+    using other = no_init_allocator<typename std::allocator_traits<Allocator>::template rebind_alloc<U>>;
+  };
+
+  no_init_allocator() = default;
+  explicit no_init_allocator(Allocator const &a) noexcept : Allocator(a) {}
+  template <typename A> no_init_allocator(no_init_allocator<A> const &other) noexcept : Allocator(other) {}
+
+  no_init_allocator select_on_container_copy_construction() const {
+    return no_init_allocator(std::allocator_traits<Allocator>::select_on_container_copy_construction(*this));
+  }
+
+  template <typename U> void construct(U *p) noexcept(std::is_nothrow_default_constructible_v<U>) {
+    // Scalars (and std::complex) are implicit-lifetime types: the
+    // allocation already provides the objects, any write is the first touch.
+    if constexpr (!(std::is_trivially_copyable_v<U> && std::is_trivially_destructible_v<U>))
+      ::new (static_cast<void *>(p)) U;
+  }
+  template <typename U, typename... Args> void construct(U *p, Args &&...args) {
+    std::allocator_traits<Allocator>::construct(*this, p, std::forward<Args>(args)...);
+  }
+
+  template <typename A> bool operator==(no_init_allocator<A> const &other) const noexcept {
+    return static_cast<Allocator const &>(*this) == static_cast<A const &>(other);
+  }
+};
+
+} // namespace detail
 
 /**
  * @brief Values of type Element on a SpatialDim-dimensional regular grid.
@@ -65,9 +104,19 @@ public:
 
   field() = default;
 
-  /// Zero-initialised field.
+  /// Zero-initialised field (written by the calling thread).
   explicit field(extents_type const &e, Allocator const &alloc = Allocator{})
-      : _extents{e}, _data(e.size() * components, scalar_type{}, alloc) {}
+      : _extents{e}, _data(e.size() * components, scalar_type{}, storage_allocator{alloc}) {}
+
+  /// Zero-initialised field first written by `exec`'s workers (NUMA first touch).
+  template <executor Exec>
+  field(extents_type const &e, Exec const &exec, Allocator const &alloc = Allocator{})
+      : _extents{e}, _data(e.size() * components, storage_allocator{alloc}) {
+    scalar_type *const p{_data.data()};
+    detail::chunked_for(_data.size(), exec, [p](std::size_t i0, std::size_t i1) {
+      std::fill(p + i0, p + i1, scalar_type{});
+    });
+  }
 
   /// Field with every point set to `value`.
   field(extents_type const &e, Element const &value, Allocator const &alloc = Allocator{})
@@ -144,7 +193,7 @@ public:
   auto mdspan() noexcept { return make_mdspan(_data.data()); }
   auto mdspan() const noexcept { return make_mdspan(_data.data()); }
 
-  allocator_type get_allocator() const noexcept { return _data.get_allocator(); }
+  allocator_type get_allocator() const noexcept { return allocator_type(_data.get_allocator()); }
 
 private:
   template <typename S> auto make_mdspan(S *ptr) const noexcept {
@@ -155,8 +204,10 @@ private:
     return md::mdspan<S, md::dextents<size_type, SpatialDim + 1>>{ptr, ext};
   }
 
+  using storage_allocator = detail::no_init_allocator<Allocator>;
+
   extents_type _extents{};
-  std::vector<scalar_type, Allocator> _data;
+  std::vector<scalar_type, storage_allocator> _data;
 };
 
 } // namespace numsim::fft
