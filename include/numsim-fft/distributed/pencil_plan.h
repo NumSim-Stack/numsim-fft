@@ -21,34 +21,8 @@
 
 namespace numsim::fft {
 
-/**
- * @brief 3D transform of a field distributed over a P0 x P1 process grid
- * with a pencil decomposition.
- *
- * A slab decomposition (distributed_plan) uses at most N0 ranks and one
- * all-to-all over all ranks per transpose. Pencils use up to N0 * N1 ranks
- * (physical space) and two all-to-alls per transform, each within a row or
- * column of the process grid (P1 or P0 ranks).
- *
- * Rank r sits at (r0, r1) = (r / P1, r % P1). Layouts, each rank holding an
- * ordinary field with local extents:
- *  - physical space: axes 0 and 1 split over P0 and P1,
- *    [n0(r0), n1(r1), N2], starting at physical_offsets();
- *  - spectral space: axes 1 and 2 split over P0 and P1, natural axis order,
- *    [S0, s1(r0), s2(r1)] of the global spectral grid S, starting at
- *    spectral_offsets().
- *
- * Forward: axis-2 pass, exchange of axes 1 and 2 within the row (ranks with
- * the same r0), axis-1 pass, exchange of axes 0 and 1 within the column
- * (same r1), axis-0 pass. Backward mirrors it. Kinds, domains and
- * normalisation are those of plan; the r2c axis may be any of the three.
- *
- * The default grid is a single row (P1 = 1, a slab decomposition) while the
- * ranks fit axis 0, see default_grid(); pass a grid to choose another. Collective semantics as distributed_plan:
- * create(), forward(), backward() and the destructor are collective, errors
- * are agreed on by all ranks, the plan is move-only. The local passes take
- * any executor.
- */
+/// 3D transform over a P0 x P1 process grid (pencils): physical [n0(r0), n1(r1), N2],
+/// spectral [S0, s1(r0), s2(r1)]; collective and error semantics as distributed_plan.
 template <real_scalar T> class pencil_plan {
 public:
   using size_type = std::size_t;
@@ -73,11 +47,7 @@ public:
     return pencil_plan{comm, *serial, domain, kinds, options, grid};
   }
 
-  /// P0 = the largest divisor of the rank count not above N0, P1 the rest:
-  /// one row (a slab decomposition with one exchange) while every rank gets
-  /// a slab, axis 1 split as well only beyond that. On one node one
-  /// exchange over all ranks measured faster than two over rows and
-  /// columns; on many nodes an explicit, squarer grid may win.
+  /// P0 = largest divisor of the rank count not above N0 (one row while every rank gets a slab).
   static grid_type default_grid(size_type ranks, size_type n0) noexcept {
     size_type p0{std::min(ranks, std::max<size_type>(n0, 1))};
     while (ranks % p0 != 0)
@@ -154,9 +124,7 @@ public:
   }
 
 private:
-  // The element type between the passes depends on where the r2c axis is:
-  // complex from the r2c pass on, real before it. Ez is the type after the
-  // axis-2 pass, Ey after the axis-1 pass.
+  // Ez / Ey: element types after the axis-2 / axis-1 pass (complex from the r2c pass on).
   template <typename EIn, typename AIn, typename EOut, typename AOut, typename Exec, typename Load>
   expected<void, error> forward_dispatch(field<EIn, 3, AIn> const &in, field<EOut, 3, AOut> &out,
                                          Exec const &exec, workspace<T> &ws, Load const *load) const {
