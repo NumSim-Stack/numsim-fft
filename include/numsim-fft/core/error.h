@@ -15,7 +15,8 @@ enum class error {
   domain_mismatch,      ///< field scalar types do not fit the plan's domain
   message_too_large,    ///< distributed: a message exceeds MPI's int count
   hooks_unsupported,    ///< point hooks on a pass whose points are not contiguous
-  invalid_process_grid  ///< distributed: the process grid does not cover the ranks
+  invalid_process_grid, ///< distributed: the process grid does not cover the ranks
+  options_mismatch      ///< distributed: plan options differ between ranks
 };
 
 constexpr std::string_view to_string(error e) noexcept {
@@ -38,6 +39,8 @@ constexpr std::string_view to_string(error e) noexcept {
     return "point hooks are not supported on r2r axes of a complex transform";
   case error::invalid_process_grid:
     return "the process grid does not match the number of ranks";
+  case error::options_mismatch:
+    return "plan options differ between ranks";
   }
   return "unknown error";
 }

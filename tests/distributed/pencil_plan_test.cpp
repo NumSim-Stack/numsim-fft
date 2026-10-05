@@ -2,6 +2,7 @@
 // the same global input, transforms its pencil with pencil_plan on several
 // process grids and compares with the matching block of the serial transform.
 
+#include <numsim-fft/distributed/distributed_plan.h>
 #include <numsim-fft/distributed/pencil_plan.h>
 #include <numsim-fft/execution/openmp.h>
 
@@ -307,5 +308,21 @@ TEST(pencil_plan, plans_of_different_grids_share_a_workspace) {
     workspace<double> ws;
     forward_matches_serial(world(), {8, 6, 5}, grid, ws);
     forward_matches_serial(world(), {11, 7, 5}, grid, ws);
+  }
+}
+
+TEST(pencil_plan, exchange_chunks_that_differ_between_ranks_are_rejected_on_every_rank) {
+  plan_options options;
+  options.exchange_chunks = static_cast<std::size_t>(world().rank()) + 1; // differs when P > 1
+  auto const p{pencil_plan<double>::create(world(), {8, 6, 5}, transform_domain::complex_to_complex, {}, options)};
+  auto const d{distributed_plan<double, 3>::create(world(), {8, 6, 5}, transform_domain::complex_to_complex, {}, options)};
+  if (world().size() == 1) {
+    EXPECT_TRUE(p.has_value());
+    EXPECT_TRUE(d.has_value());
+  } else {
+    ASSERT_FALSE(p.has_value());
+    EXPECT_EQ(p.error(), error::options_mismatch);
+    ASSERT_FALSE(d.has_value());
+    EXPECT_EQ(d.error(), error::options_mismatch);
   }
 }

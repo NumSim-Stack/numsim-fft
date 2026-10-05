@@ -157,8 +157,10 @@ which measured fastest on one node; pass a grid to split axis 1 as well.
 splits the exchange of both distributed plans into k non-blocking
 all-to-alls pipelined with the local transforms of the neighbouring chunks;
 results are bit-identical to the blocking exchange. On one 8-core node it
-gained 2–7 % (slab, one-row pencils) and nothing on 2D grids, so it is off by
-default; it is meant for networks where an exchange takes as long as a pass.
+changed the time by −4 to −7 % (slab), −3 to +4 % (one-row pencils) and ±1 %
+(2D grids), so it is off by default; it is meant for networks where an
+exchange takes as long as a pass. A value that differs between ranks is
+rejected by create() (error::options_mismatch).
 
 ## Conventions
 

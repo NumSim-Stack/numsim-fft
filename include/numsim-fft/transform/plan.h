@@ -41,10 +41,7 @@ struct plan_options {
   normalization norm{normalization::backward};
   /// Lines transformed together (vector batch); 0 picks a cache-sized block.
   std::size_t max_batch{0};
-  /// Distributed plans only: split every exchange into this many
-  /// non-blocking all-to-alls, pipelined with the local transforms of the
-  /// neighbouring chunks. 1 (the default) exchanges in one blocking
-  /// all-to-all. Must be the same on every rank.
+  /// Distributed plans: pipelined exchange in this many chunks (1: blocking); equal on all ranks.
   std::size_t exchange_chunks{1};
 };
 

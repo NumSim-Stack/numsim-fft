@@ -5,6 +5,7 @@
 #error "numsim-fft: distributed plans need NUMSIM_FFT_ENABLE_MPI"
 #endif
 
+#include "collective.h"
 #include "../core/error.h"
 #include "../core/expected.h"
 #include "../transform/plan.h"
@@ -51,11 +52,7 @@ namespace numsim::fft {
  * Pass a workspace in loops: the pre/post-transpose fields, the MPI pack
  * buffers and the MPI layouts then persist between calls.
  *
- * plan_options::exchange_chunks = k > 1 splits each rank's rows into k
- * chunks: the local passes of one chunk run while the previous chunk is
- * exchanged (non-blocking all-to-all), forward and backward. Results are
- * identical to the blocking exchange. Transforms with point hooks use the
- * blocking exchange.
+ * plan_options::exchange_chunks > 1 pipelines the exchange (no hooks; identical results).
  */
 template <real_scalar T, std::size_t Dim> class distributed_plan {
   static_assert(Dim >= 2, "distributed_plan: slab decomposition needs Dim >= 2");
@@ -72,6 +69,8 @@ public:
     auto serial{plan<T, Dim>::create(global, domain, kinds, options)};
     if (!serial)
       return unexpected(serial.error());
+    if (!detail::same_on_all_ranks(comm, options.exchange_chunks))
+      return unexpected(error::options_mismatch);
     return distributed_plan{comm, *serial, domain, kinds, options};
   }
 
@@ -304,7 +303,7 @@ private:
     if (_chunks < 2)
       return chunks;
     for (size_type j{0}; j < _chunks; ++j) {
-      auto const [r0, r1]{detail::pipelined_exchange<double>::chunk(j, _local_physical[0], _chunks)};
+      auto const [r0, r1]{detail::chunk_range(j, _local_physical[0], _chunks)};
       size_type const n{r1 - r0};
       if (n == 0 || std::ranges::any_of(chunks, [n](auto const &c) { return c.first == n; }))
         continue;

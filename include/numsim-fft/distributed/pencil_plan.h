@@ -5,6 +5,7 @@
 #error "numsim-fft: distributed plans need NUMSIM_FFT_ENABLE_MPI"
 #endif
 
+#include "collective.h"
 #include "../core/error.h"
 #include "../core/expected.h"
 #include "../transform/plan.h"
@@ -48,6 +49,8 @@ public:
       grid = default_grid(ranks, global[0]);
     if (grid[0] * grid[1] != ranks)
       return unexpected(error::invalid_process_grid);
+    if (!detail::same_on_all_ranks(comm, options.exchange_chunks))
+      return unexpected(error::options_mismatch);
     return pencil_plan{comm, *serial, domain, kinds, options, grid};
   }
 

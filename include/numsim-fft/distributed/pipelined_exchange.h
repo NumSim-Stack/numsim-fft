@@ -9,33 +9,18 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <utility>
 #include <vector>
 
 namespace numsim::fft::detail {
 
-/**
- * @brief The two-axis exchange of pencil_transpose (a layout
- * [outer][a_local][B][R] <-> b layout [outer][A][b_local][R]), split into
- * `chunks` non-blocking all-to-alls that are pipelined with the caller's
- * local work:
- *
- *   produce(0); start(0);
- *   for j = 1..k:  produce(j); start(j);   (j < k)
- *                  wait(j-1); consume(j-1);
- *
- * so the transform of one chunk runs while the previous chunk is in flight.
- * produce(j) must have written the source rows of chunk j, consume(j) may
- * use the destination rows of chunk j.
- *
- * Chunks split either the outer rows (split::outer: chunk j is the outer
- * rows [j*outer/k, (j+1)*outer/k), the same on every rank, so all ranks of
- * the communicator must have the same `outer`) or the a rows of every rank
- * (split::a: chunk j of rank q is its a rows [j*a(q)/k, (j+1)*a(q)/k)).
- *
- * MPI_Ialltoallv is called directly: the count and displacement arrays
- * must stay valid until completion, they live in a workspace cache. Every
- * rank must use the same `chunks` (collective calls must match).
- */
+/// [first, last) of chunk j of n rows split into k chunks.
+constexpr std::pair<std::size_t, std::size_t> chunk_range(std::size_t j, std::size_t n, std::size_t k) noexcept {
+  return {j * n / k, (j + 1) * n / k};
+}
+
+/// pencil_transpose's exchange split into `chunks` MPI_Ialltoallv, pipelined with
+/// produce(j) / consume(j); `chunks` must be equal on all ranks.
 template <typename S> class pipelined_exchange {
 public:
   using size_type = std::size_t;
@@ -46,9 +31,8 @@ public:
       : _comm{comm}, _outer{outer}, _a{a}, _b{b}, _R{R}, _k{std::max<size_type>(chunks, 1)}, _mode{mode},
         _slot{cache_slot}, _rank{static_cast<size_type>(comm.rank())}, _size{static_cast<size_type>(comm.size())} {}
 
-  /// [first, last) of chunk j of n rows.
   static constexpr std::pair<size_type, size_type> chunk(size_type j, size_type n, size_type k) noexcept {
-    return {j * n / k, (j + 1) * n / k};
+    return chunk_range(j, n, k);
   }
 
   /// a layout -> b layout.
@@ -67,11 +51,21 @@ private:
   struct direction {
     std::vector<std::vector<int>> send_counts, send_displs, recv_counts, recv_displs; // [chunk][rank]
   };
-  struct cache {
-    size_type outer{0}, R{0}, A{0}, B{0}, size{0}, k{0};
+  /// What the cached counts depend on.
+  struct cache_key {
+    MPI_Comm comm{MPI_COMM_NULL};
+    size_type rank{0}, size{0}, outer{0}, R{0}, A{0}, B{0}, k{0};
     split mode{split::outer};
+    bool operator==(cache_key const &) const = default;
+  };
+  struct cache {
+    cache_key key;
     direction ab, ba;
   };
+
+  cache_key key() const noexcept {
+    return {_comm.native_handle(), _rank, _size, _outer, _R, _a.global_size(), _b.global_size(), _k, _mode};
+  }
 
   /// Outer rows and a rows of rank q in chunk j.
   std::pair<size_type, size_type> outer_rows(size_type j) const {
@@ -122,7 +116,7 @@ private:
 
   /// Counts and displacements (elements) of both directions, every chunk.
   cache build_cache() const {
-    cache c{_outer, _R, _a.global_size(), _b.global_size(), _size, _k, _mode, {}, {}};
+    cache c{key(), {}, {}};
     auto fill = [&](direction &d, bool atob) {
       d.send_counts.assign(_k, std::vector<int>(_size, 0));
       d.send_displs = d.recv_counts = d.recv_displs = d.send_counts;
@@ -157,12 +151,7 @@ private:
   }
 
   template <typename T> cache const &layouts(workspace<T> &ws) const {
-    return ws.template object<cache>(
-        _slot, [&] { return build_cache(); },
-        [&](cache const &c) {
-          return c.outer == _outer && c.R == _R && c.A == _a.global_size() && c.B == _b.global_size() &&
-                 c.size == _size && c.k == _k && c.mode == _mode;
-        });
+    return ws.template object<cache>(_slot, [&] { return build_cache(); }, [&](cache const &c) { return c.key == key(); });
   }
 
   template <bool AtoB, typename T, typename Produce, typename Consume>
