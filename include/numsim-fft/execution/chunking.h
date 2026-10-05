@@ -6,10 +6,7 @@
 
 namespace numsim::fft::detail {
 
-/// Calls f(first, last) for the chunks of [0, n): about 8 per worker (one
-/// for a single worker). The field algebra and the first touch of new
-/// fields share this split, so a chunk's pages are first written by the
-/// same kind of work item that later streams through them.
+/// Calls f(first, last) for the chunks of [0, n) (about 8 per worker), as the field algebra splits.
 template <typename Exec, typename F> void chunked_for(std::size_t n, Exec const &exec, F const &f) {
   if (n == 0)
     return;

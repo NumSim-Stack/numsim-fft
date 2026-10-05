@@ -24,10 +24,7 @@ namespace numsim::fft {
 
 namespace detail {
 
-/// Allocator adaptor whose value-less construct() leaves the memory as the
-/// allocator returned it, so a field can be sized without writing it and
-/// zeroed afterwards by the threads that will use it. Every other
-/// construction (copies, explicit values) is the ordinary one.
+/// Allocator whose value-less construct() leaves memory unwritten (for first touch).
 template <typename Allocator> struct no_init_allocator : Allocator {
   using value_type = typename std::allocator_traits<Allocator>::value_type;
   template <typename U> struct rebind {
@@ -111,16 +108,7 @@ public:
   explicit field(extents_type const &e, Allocator const &alloc = Allocator{})
       : _extents{e}, _data(e.size() * components, scalar_type{}, storage_allocator{alloc}) {}
 
-  /**
-   * @brief Zero-initialised field whose memory is first written by `exec`'s
-   * workers, in the chunks the field algebra (fill, axpy, dot, ...) uses.
-   *
-   * On NUMA machines the operating system places a page on the node of the
-   * thread that writes it first; a field zeroed by one thread lives on one
-   * node and every other socket reads it remotely. Build the fields of a
-   * parallel solver with its executor. On a single NUMA node this makes no
-   * difference.
-   */
+  /// Zero-initialised field first written by `exec`'s workers (NUMA first touch).
   template <executor Exec>
   field(extents_type const &e, Exec const &exec, Allocator const &alloc = Allocator{})
       : _extents{e}, _data(e.size() * components, storage_allocator{alloc}) {
