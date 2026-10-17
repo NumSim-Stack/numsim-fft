@@ -42,19 +42,28 @@ public:
   /// early on it before a collective.
   bool fits_int() const noexcept { return transpose_fits_int(_rows, _cols, _R); }
 
-  /// MPI layouts and displacements of both directions, built once per
-  /// (workspace, scalar type, R) and reused.
+  /// What the cached layouts depend on.
+  struct cache_key {
+    MPI_Comm comm{MPI_COMM_NULL};
+    size_type rank{0}, size{0}, R{0}, rows{0}, cols{0};
+    bool operator==(cache_key const &) const = default;
+  };
+
+  /// MPI layouts and displacements of both directions, reused while the key matches.
   struct cache {
-    size_type R{0};
-    size_type size{0};
+    cache_key key;
     mpl::contiguous_layouts<S> rc_send, rc_recv, cr_send, cr_recv;
     mpl::displacements rc_send_d, rc_recv_d, cr_send_d, cr_recv_d;
   };
 
+  cache_key key() const noexcept {
+    return {_comm.native_handle(), _rank, _size, _R, _rows.global_size(), _cols.global_size()};
+  }
+
   template <real_scalar T> cache &layouts(workspace<T> &ws) const {
     return ws.template object<cache>(
         workspace_slot::transpose_cache, [&] { return build_cache(); },
-        [&](cache const &c) { return c.R == _R && c.size == _size; });
+        [&](cache const &c) { return c.key == key(); });
   }
 
   /// rows layout -> cols layout.
@@ -96,7 +105,7 @@ public:
 private:
   cache build_cache() const {
     size_type const n0{_rows.local_size(_rank)}, m1{_cols.local_size(_rank)};
-    cache c{_R, _size, mpl::contiguous_layouts<S>(_size), mpl::contiguous_layouts<S>(_size),
+    cache c{key(), mpl::contiguous_layouts<S>(_size), mpl::contiguous_layouts<S>(_size),
             mpl::contiguous_layouts<S>(_size), mpl::contiguous_layouts<S>(_size),
             mpl::displacements(_size), mpl::displacements(_size), mpl::displacements(_size),
             mpl::displacements(_size)};
