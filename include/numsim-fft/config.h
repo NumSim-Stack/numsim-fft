@@ -3,7 +3,7 @@
 
 // Single source of the version number; CMakeLists.txt parses these lines.
 #define NUMSIM_FFT_VERSION_MAJOR 0
-#define NUMSIM_FFT_VERSION_MINOR 1
+#define NUMSIM_FFT_VERSION_MINOR 2
 #define NUMSIM_FFT_VERSION_PATCH 0
 
 // Backend availability is set by the CMake target as compile definitions:
